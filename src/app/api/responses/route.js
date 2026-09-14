@@ -19,7 +19,7 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get('limit')) || 10;
     const offset = (page - 1) * limit;
 
-    const db = getDb();
+    const db = await getDb();
     let query = `
       SELECT r.*, s.title as survey_title, p.name as project_name 
       FROM responses r 
