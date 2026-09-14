@@ -1,4 +1,5 @@
 import path from 'path';
+import { withDatabaseStage } from './databaseDiagnostic.mjs';
 import { initializeRecallStore } from './recallStore.mjs';
 import { initializeParticipantStore } from './participantStore.mjs';
 import { migrateResponseProfile } from './responseMigration.mjs';
@@ -10,7 +11,7 @@ import { bootstrapAdmin } from './bootstrapAdmin.mjs';
 let databasePromise = null;
 
 async function initializeDb(dbInstance) {
-  await dbInstance.exec(`
+  await withDatabaseStage('schema', () => dbInstance.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
@@ -50,18 +51,18 @@ async function initializeDb(dbInstance) {
       data_json TEXT NOT NULL DEFAULT '{}',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-  `);
+  `));
 
-  await migrateResponseProfile(dbInstance);
-  await initializeParticipantStore(dbInstance);
-  await initializeRecallStore(dbInstance);
+  await withDatabaseStage('response_migration', () => migrateResponseProfile(dbInstance));
+  await withDatabaseStage('participant_migration', () => initializeParticipantStore(dbInstance));
+  await withDatabaseStage('recall_schema', () => initializeRecallStore(dbInstance));
 
-  await bootstrapAdmin(dbInstance);
+  await withDatabaseStage('admin_bootstrap', () => bootstrapAdmin(dbInstance));
 }
 
 export async function getDb() {
   if (!databasePromise) {
-    databasePromise = openDatabase().catch(error => {
+    databasePromise = withDatabaseStage('configuration', openDatabase).catch(error => {
       databasePromise = null;
       throw error;
     });
@@ -88,10 +89,11 @@ async function openDatabase() {
   }
   const db = createDatabaseAdapter(client);
   try {
+    await withDatabaseStage('connection', () => db.prepare('SELECT 1 AS connected').get());
     await initializeDb(db);
     return db;
   } catch (error) {
-    await db.close();
+    try { await db.close(); } catch { /* Preserve the failure being diagnosed. */ }
     throw error;
   }
 }

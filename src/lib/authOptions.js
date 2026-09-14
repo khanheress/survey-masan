@@ -1,6 +1,7 @@
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { getDb } from './db';
 import bcryptjs from 'bcryptjs';
+import { databaseDiagnostic } from './databaseDiagnostic.mjs';
 
 export const authOptions = {
   providers: [
@@ -18,7 +19,7 @@ export const authOptions = {
         if (!user || !bcryptjs.compareSync(credentials.password, user.password_hash)) return null;
         return { id: user.id, name: user.username, email: user.email, role: user.role, username: user.username };
       } catch (error) {
-        console.error('[auth] Account database unavailable:', error.code || error.name);
+        console.error('[auth] Account database unavailable:', JSON.stringify(databaseDiagnostic(error)));
         throw new Error('AUTH_DATABASE_UNAVAILABLE');
       }
     }
