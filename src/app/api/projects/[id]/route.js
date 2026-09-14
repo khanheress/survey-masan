@@ -1,0 +1,79 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/authOptions';
+import { getDb } from '@/lib/db';
+
+export async function GET(request, context) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { id } = await context.params;
+    const db = getDb();
+    const project = db.prepare(`
+      SELECT p.*,
+      (SELECT COUNT(*) FROM responses WHERE project_id = p.id) as response_count,
+      (SELECT COUNT(*) FROM surveys WHERE project_id = p.id) as survey_count
+      FROM projects p
+      WHERE p.id = ?
+    `).get(id);
+    if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json(project, { status: 200 });
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function PUT(request, context) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { id } = await context.params;
+    const body = await request.json();
+    const db = getDb();
+    
+    const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    
+    const fields = [];
+    const values = [];
+    const allowedFields = ['name', 'description', 'start_date', 'end_date', 'max_responses', 'status'];
+    for (const [key, value] of Object.entries(body)) {
+      if (allowedFields.includes(key)) {
+        fields.push(`${key} = ?`);
+        values.push(value);
+      }
+    }
+    if (fields.length === 0) return NextResponse.json(existing, { status: 200 });
+    
+    values.push(id);
+    db.prepare(`UPDATE projects SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    
+    const updated = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    return NextResponse.json(updated, { status: 200 });
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request, context) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { id } = await context.params;
+    const db = getDb();
+    
+    const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    if (!existing) return NextResponse.json({ error: 'Không tìm thấy dự án' }, { status: 404 });
+
+    const transaction = db.transaction(() => {
+      db.prepare('DELETE FROM responses WHERE project_id = ?').run(id);
+      db.prepare('DELETE FROM surveys WHERE project_id = ?').run(id);
+      db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+    });
+    transaction();
+    
+    return NextResponse.json({ message: 'Deleted successfully' }, { status: 200 });
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
