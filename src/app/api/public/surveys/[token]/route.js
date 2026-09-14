@@ -5,18 +5,18 @@ import { getSurveyAvailability } from '@/lib/surveyAvailability.mjs';
 export async function GET(request, context) {
   try {
     const { token } = await context.params;
-    const db = getDb();
-    
-    const survey = db.prepare('SELECT * FROM surveys WHERE share_token = ?').get(token);
+    const db = await getDb();
+
+    const survey = await db.prepare('SELECT * FROM surveys WHERE share_token = ?').get(token);
     if (!survey) return NextResponse.json({ error: 'Khảo sát không tồn tại' }, { status: 404 });
     if (!survey.is_published) return NextResponse.json({ error: 'Khảo sát chưa được công khai' }, { status: 404 });
-    
-    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(survey.project_id);
+
+    const project = await db.prepare('SELECT * FROM projects WHERE id = ?').get(survey.project_id);
     if (!project) return NextResponse.json({ error: 'Dự án không tồn tại' }, { status: 404 });
 
-    const responseCount = project.max_responses > 0
-      ? db.prepare('SELECT COUNT(*) as count FROM responses WHERE project_id = ?').get(project.id).count
-      : 0;
+    const responseCount = project.max_responses > 0 ?
+    (await db.prepare('SELECT COUNT(*) as count FROM responses WHERE project_id = ?').get(project.id)).count :
+    0;
     const availability = getSurveyAvailability(project, responseCount);
     const { isActive, hasCapacity: has_capacity, capacityRemaining: capacity_remaining } = availability;
 
@@ -42,7 +42,7 @@ export async function GET(request, context) {
         survey_title: survey.title,
         project_status: project.status,
         is_active: isActive,
-        has_capacity,
+        has_capacity
       }, { status: 410 });
     }
 
@@ -56,7 +56,7 @@ export async function GET(request, context) {
       project_status: project.status,
       is_active: isActive,
       has_capacity,
-      capacity_remaining,
+      capacity_remaining
     }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

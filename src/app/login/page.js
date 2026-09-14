@@ -1,6 +1,7 @@
 'use client';
 
 import Icon from '@/components/Icon';
+import { loginErrorMessage } from '@/lib/loginError.mjs';
 
 import React, { useState } from 'react';
 import { signIn } from 'next-auth/react';
@@ -25,8 +26,9 @@ export default function LoginPage() {
         password,
       });
 
-      if (res?.error) {
-        setError('Tên đăng nhập hoặc mật khẩu không đúng');
+      const message = loginErrorMessage(res);
+      if (message) {
+        setError(message);
       } else {
         router.push('/admin');
       }

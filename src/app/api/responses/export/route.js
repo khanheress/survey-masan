@@ -11,10 +11,10 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const survey_id = searchParams.get('survey_id');
     const project_id = searchParams.get('project_id');
-    
+
     const phone = searchParams.get('phone');
 
-    const db = getDb();
+    const db = await getDb();
     let query = `
       SELECT r.*, s.title as survey_title, p.name as project_name 
       FROM responses r 
@@ -24,16 +24,16 @@ export async function GET(request) {
     `;
     const params = [];
 
-    if (survey_id) { query += ' AND r.survey_id = ?'; params.push(survey_id); }
-    if (project_id) { query += ' AND r.project_id = ?'; params.push(project_id); }
+    if (survey_id) {query += ' AND r.survey_id = ?';params.push(survey_id);}
+    if (project_id) {query += ' AND r.project_id = ?';params.push(project_id);}
 
-    if (phone) { query += ' AND r.respondent_phone LIKE ?'; params.push(`%${phone}%`); }
+    if (phone) {query += ' AND r.respondent_phone LIKE ?';params.push(`%${phone}%`);}
 
-    const responses = db.prepare(query).all(...params);
-    
-    const flattened = responses.map(r => {
+    const responses = await db.prepare(query).all(...params);
+
+    const flattened = responses.map((r) => {
       let data = {};
-      try { data = JSON.parse(r.data_json); } catch (e) {}
+      try {data = JSON.parse(r.data_json);} catch (e) {}
       return {
         'Response ID': r.id,
         'Project Name': r.project_name,
@@ -52,7 +52,7 @@ export async function GET(request) {
     });
 
     const csv = Papa.unparse(flattened, { escapeFormulae: true });
-    
+
     return new NextResponse('\uFEFF' + csv, {
       status: 200,
       headers: {

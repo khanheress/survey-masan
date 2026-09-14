@@ -7,8 +7,8 @@ export async function POST(request) {
     const { phone } = body;
     if (!phone) return NextResponse.json({ error: 'Phone is required' }, { status: 400 });
 
-    const db = getDb();
-    const projects = db.prepare(`
+    const db = await getDb();
+    const projects = await db.prepare(`
       SELECT DISTINCT p.id, p.name 
       FROM responses r
       JOIN projects p ON r.project_id = p.id

@@ -5,32 +5,32 @@ export function normalizePhone(value = '') {
   return /^(?:\+84|0084)\d{9}$/.test(phone) ? `0${phone.replace(/^(?:\+84|0084)/, '')}` : phone;
 }
 
-export function recordParticipant(db, response) {
+export async function recordParticipant(db, response) {
   // One durable participation per submitted response. Re-importing cannot overwrite newer data.
-  if (db.prepare('SELECT 1 FROM participant_history WHERE response_id = ?').get(response.id)) return;
+  if (await db.prepare('SELECT 1 FROM participant_history WHERE response_id = ?').get(response.id)) return;
   const phone = normalizePhone(response.respondent_phone);
   const participantId = phone ? `phone:${phone}` : `response:${response.id}`;
   const profile = Object.fromEntries(RESPONDENT_FIELDS.map(({ key }) => [key, response[key] ?? null]));
   profile.respondent_phone = phone || null;
   profile.respondent_email = response.respondent_email || null;
   const submittedAt = response.created_at || new Date().toISOString();
-  db.prepare(`INSERT INTO participants (id, phone, name, profile_json, first_seen, last_seen)
+  await db.prepare(`INSERT INTO participants (id, phone, name, profile_json, first_seen, last_seen)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = CASE WHEN excluded.last_seen >= participants.last_seen THEN excluded.name ELSE participants.name END,
       profile_json = CASE WHEN excluded.last_seen >= participants.last_seen THEN excluded.profile_json ELSE participants.profile_json END,
       first_seen = MIN(participants.first_seen, excluded.first_seen),
-      last_seen = MAX(participants.last_seen, excluded.last_seen)`)
-    .run(participantId, phone || null, profile.respondent_name || '', JSON.stringify(profile), submittedAt, submittedAt);
-  db.prepare(`INSERT INTO participant_history
+      last_seen = MAX(participants.last_seen, excluded.last_seen)`).
+  run(participantId, phone || null, profile.respondent_name || '', JSON.stringify(profile), submittedAt, submittedAt);
+  await db.prepare(`INSERT INTO participant_history
     (response_id, participant_id, project_id, project_name, survey_id, survey_title, inviter, submitted_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(response.id, participantId, response.project_id || null, response.project_name || 'Dự án đã xóa',
-      response.survey_id || null, response.survey_title || 'Khảo sát đã xóa', response.respondent_inviter || null, submittedAt);
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).
+  run(response.id, participantId, response.project_id || null, response.project_name || 'Dự án đã xóa',
+  response.survey_id || null, response.survey_title || 'Khảo sát đã xóa', response.respondent_inviter || null, submittedAt);
 }
 
-export function initializeParticipantStore(db) {
-  db.exec(`CREATE TABLE IF NOT EXISTS participants (
+export async function initializeParticipantStore(db) {
+  await db.exec(`CREATE TABLE IF NOT EXISTS participants (
     id TEXT PRIMARY KEY, phone TEXT, name TEXT NOT NULL, profile_json TEXT NOT NULL,
     first_seen TEXT NOT NULL, last_seen TEXT NOT NULL
   );
@@ -41,42 +41,42 @@ export function initializeParticipantStore(db) {
   CREATE INDEX IF NOT EXISTS participant_history_person ON participant_history(participant_id);
   CREATE INDEX IF NOT EXISTS participant_history_project ON participant_history(project_id);
   CREATE INDEX IF NOT EXISTS participants_last_seen ON participants(last_seen);`);
-  db.transaction(() => {
-    const oldResponses = db.prepare(`SELECT r.*, p.name AS project_name, s.title AS survey_title
+  await db.transaction(async () => {
+    const oldResponses = await db.prepare(`SELECT r.*, p.name AS project_name, s.title AS survey_title
       FROM responses r LEFT JOIN projects p ON p.id = r.project_id LEFT JOIN surveys s ON s.id = r.survey_id
       WHERE NOT EXISTS (SELECT 1 FROM participant_history h WHERE h.response_id = r.id)
       ORDER BY r.created_at, r.id`).all();
-    for (const response of oldResponses) recordParticipant(db, response);
+    for (const response of oldResponses) await recordParticipant(db, response);
   })();
 }
 
-export function listParticipants(db, { search = '', projectId = '', inviter = '', page = 1, exportAll = false } = {}) {
+export async function listParticipants(db, { search = '', projectId = '', inviter = '', page = 1, exportAll = false } = {}) {
   const conditions = [];
   const args = [];
   if (search.trim()) {
-    const escape = value => value.replace(/[\\%_]/g, '\\$&');
+    const escape = (value) => value.replace(/[\\%_]/g, '\\$&');
     conditions.push("(p.name LIKE ? ESCAPE '\\' OR p.phone LIKE ? ESCAPE '\\')");
     args.push(`%${escape(search.trim())}%`, `%${escape(normalizePhone(search) || search.trim())}%`);
   }
   if (projectId || inviter) {
     const historyConditions = ['h.participant_id = p.id'];
-    if (projectId) { historyConditions.push('h.project_id = ?'); args.push(projectId); }
-    if (inviter) { historyConditions.push('h.inviter = ?'); args.push(inviter); }
+    if (projectId) {historyConditions.push('h.project_id = ?');args.push(projectId);}
+    if (inviter) {historyConditions.push('h.inviter = ?');args.push(inviter);}
     conditions.push(`EXISTS (SELECT 1 FROM participant_history h WHERE ${historyConditions.join(' AND ')})`);
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const total = db.prepare(`SELECT COUNT(*) AS total FROM participants p ${where}`).get(...args).total;
+  const total = (await db.prepare(`SELECT COUNT(*) AS total FROM participants p ${where}`).get(...args)).total;
   const limit = 20;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(Math.max(1, Number.parseInt(page, 10) || 1), totalPages);
-  const rows = db.prepare(`SELECT p.* FROM participants p ${where} ORDER BY p.last_seen DESC, p.id ${exportAll ? '' : 'LIMIT ? OFFSET ?'}`)
-    .all(...args, ...(exportAll ? [] : [limit, (currentPage - 1) * limit]));
+  const rows = await db.prepare(`SELECT p.* FROM participants p ${where} ORDER BY p.last_seen DESC, p.id ${exportAll ? '' : 'LIMIT ? OFFSET ?'}`).
+  all(...args, ...(exportAll ? [] : [limit, (currentPage - 1) * limit]));
   const historyQuery = db.prepare('SELECT * FROM participant_history WHERE participant_id = ? ORDER BY submitted_at DESC, response_id');
-  const participants = rows.map(row => {
-    const history = historyQuery.all(row.id);
-    const projects = [...new Map(history.map(item => [item.project_id || item.project_name, { id: item.project_id, name: item.project_name }])).values()];
+  const participants = await Promise.all(rows.map(async (row) => {
+    const history = await historyQuery.all(row.id);
+    const projects = [...new Map(history.map((item) => [item.project_id || item.project_name, { id: item.project_id, name: item.project_name }])).values()];
     return { id: row.id, ...JSON.parse(row.profile_json), first_seen: row.first_seen, last_seen: row.last_seen, projects, history };
-  });
-  const projects = db.prepare('SELECT project_id AS id, MAX(project_name) AS name FROM participant_history WHERE project_id IS NOT NULL GROUP BY project_id ORDER BY name').all();
+  }));
+  const projects = await db.prepare('SELECT project_id AS id, MAX(project_name) AS name FROM participant_history WHERE project_id IS NOT NULL GROUP BY project_id ORDER BY name').all();
   return { participants, projects, pagination: { total, page: currentPage, limit, totalPages } };
 }

@@ -8,15 +8,15 @@ export async function GET(request, context) {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { id } = await context.params;
-    const db = getDb();
-    const survey = db.prepare(`
+    const db = await getDb();
+    const survey = await db.prepare(`
       SELECT s.*, p.name as project_name 
       FROM surveys s 
       LEFT JOIN projects p ON s.project_id = p.id 
       WHERE s.id = ?
     `).get(id);
     if (!survey) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    
+
     // Parse fields_json from string to array
     let parsedSurvey = { ...survey };
     if (typeof survey.fields_json === 'string') {
@@ -26,7 +26,7 @@ export async function GET(request, context) {
         parsedSurvey.fields_json = [];
       }
     }
-    
+
     return NextResponse.json(parsedSurvey, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -39,11 +39,11 @@ export async function PUT(request, context) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { id } = await context.params;
     const body = await request.json();
-    const db = getDb();
-    
-    const existing = db.prepare('SELECT * FROM surveys WHERE id = ?').get(id);
+    const db = await getDb();
+
+    const existing = await db.prepare('SELECT * FROM surveys WHERE id = ?').get(id);
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    
+
     const fields = [];
     const values = [];
     const allowedFields = ['title', 'description', 'fields_json', 'is_published'];
@@ -59,11 +59,11 @@ export async function PUT(request, context) {
       }
     }
     if (fields.length === 0) return NextResponse.json(existing, { status: 200 });
-    
+
     values.push(id);
-    db.prepare(`UPDATE surveys SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-    
-    const updated = db.prepare('SELECT * FROM surveys WHERE id = ?').get(id);
+    await db.prepare(`UPDATE surveys SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+    const updated = await db.prepare('SELECT * FROM surveys WHERE id = ?').get(id);
     let parsedUpdated = { ...updated };
     if (typeof updated.fields_json === 'string') {
       try {
@@ -83,14 +83,14 @@ export async function DELETE(request, context) {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const { id } = await context.params;
-    const db = getDb();
-    
-    const transaction = db.transaction(() => {
-      db.prepare('DELETE FROM responses WHERE survey_id = ?').run(id);
-      db.prepare('DELETE FROM surveys WHERE id = ?').run(id);
+    const db = await getDb();
+
+    const transaction = db.transaction(async () => {
+      await db.prepare('DELETE FROM responses WHERE survey_id = ?').run(id);
+      await db.prepare('DELETE FROM surveys WHERE id = ?').run(id);
     });
-    transaction();
-    
+    await transaction();
+
     return NextResponse.json({ message: 'Deleted successfully' }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

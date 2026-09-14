@@ -8,8 +8,8 @@ export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const db = getDb();
-    const projects = db.prepare(`
+    const db = await getDb();
+    const projects = await db.prepare(`
       SELECT p.*,
       (SELECT COUNT(*) FROM responses WHERE project_id = p.id) as response_count,
       (SELECT COUNT(*) FROM surveys WHERE project_id = p.id) as survey_count
@@ -28,12 +28,12 @@ export async function POST(request) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
     const { name, description, start_date, end_date, max_responses, status } = body;
-    const db = getDb();
+    const db = await getDb();
     const id = uuidv4();
     const created_by = session.user.id;
     const insert = db.prepare('INSERT INTO projects (id, name, description, start_date, end_date, max_responses, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    insert.run(id, name, description || null, start_date, end_date, max_responses || 0, status || 'active', created_by);
-    const newProject = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    await insert.run(id, name, description || null, start_date, end_date, max_responses || 0, status || 'active', created_by);
+    const newProject = await db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
     return NextResponse.json(newProject, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

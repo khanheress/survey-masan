@@ -3,14 +3,14 @@ import { initializeRecallStore } from './recallStore.mjs';
 import { initializeParticipantStore } from './participantStore.mjs';
 import { migrateResponseProfile } from './responseMigration.mjs';
 import fs from 'fs';
-import bcryptjs from 'bcryptjs';
-import { v4 as uuidv4 } from 'uuid';
+import { createClient as createRemoteClient } from '@libsql/client/web';
+import { createDatabaseAdapter } from './databaseAdapter.mjs';
+import { bootstrapAdmin } from './bootstrapAdmin.mjs';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'survey.db');
-let db = null;
+let databasePromise = null;
 
-function initializeDb(dbInstance) {
-  dbInstance.exec(`
+async function initializeDb(dbInstance) {
+  await dbInstance.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
@@ -52,26 +52,46 @@ function initializeDb(dbInstance) {
     );
   `);
 
-  migrateResponseProfile(dbInstance);
-  initializeParticipantStore(dbInstance);
-  initializeRecallStore(dbInstance);
+  await migrateResponseProfile(dbInstance);
+  await initializeParticipantStore(dbInstance);
+  await initializeRecallStore(dbInstance);
 
-  const userCount = dbInstance.prepare('SELECT COUNT(*) as count FROM users').get();
-  if (userCount.count === 0) {
-    const insertUser = dbInstance.prepare('INSERT INTO users (id, username, email, password_hash, role) VALUES (?, ?, ?, ?, ?)');
-    insertUser.run(uuidv4(), 'admin', 'admin@survey.com', bcryptjs.hashSync('admin123', 10), 'admin');
-    insertUser.run(uuidv4(), 'mod', 'mod@survey.com', bcryptjs.hashSync('mod123', 10), 'moderator');
-  }
+  await bootstrapAdmin(dbInstance);
 }
 
-export function getDb() {
-  if (db) return db;
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const Database = require('better-sqlite3');
-  db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  initializeDb(db);
-  return db;
+export async function getDb() {
+  if (!databasePromise) {
+    databasePromise = openDatabase().catch(error => {
+      databasePromise = null;
+      throw error;
+    });
+  }
+  return databasePromise;
+}
+
+async function openDatabase() {
+  let url = process.env.TURSO_DATABASE_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN;
+  let client;
+  if (url) {
+    if (!/^(libsql|https):\/\//.test(url) || !authToken) {
+      throw new Error('Configure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN for the remote database.');
+    }
+    client = createRemoteClient({ url, authToken, intMode: 'number' });
+  } else {
+    if (process.env.VERCEL) throw new Error('Vercel requires a remote database. Configure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN.');
+    const filename = process.env.DATABASE_PATH || path.join(process.cwd(), 'data', 'survey.db');
+    fs.mkdirSync(path.dirname(filename), { recursive: true });
+    url = `file:${path.resolve(/* turbopackIgnore: true */ filename)}`;
+    const { createClient } = await import('@libsql/client');
+    client = createClient({ url, intMode: 'number' });
+  }
+  const db = createDatabaseAdapter(client);
+  try {
+    await initializeDb(db);
+    return db;
+  } catch (error) {
+    await db.close();
+    throw error;
+  }
 }
