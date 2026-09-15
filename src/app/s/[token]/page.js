@@ -1,6 +1,7 @@
 'use client';
 
 import Icon from '@/components/Icon';
+import {checkEligibility,emptyProjectRules} from '@/lib/projectRules.mjs';
 import RespondentFields from '@/components/RespondentFields';
 import { validateRespondent } from '@/lib/respondent.mjs';
 
@@ -65,9 +66,15 @@ export default function PublicSurveyPage({ params }) {
     fetchSurvey();
   }, [token]);
 
+  const checkProject = (profile,values) => {
+    if(validateRespondent(profile).error)return;
+    const result=checkEligibility(survey.project_rules||emptyProjectRules(),profile,values,survey.fields_json,survey.quota_counts||{});
+    if(result.eligible===false){setEndMessage(result.message);setStatus('screenout');}
+  };
   const handleAnswerChange = (fieldId, value) => {
     const next = changeSurveyAnswer(survey.fields_json, answers, fieldId, value);
     setAnswers(next);
+    checkProject(respondentInfo,next);
     const nextFlow = evaluateSurvey(survey.fields_json, next);
     if (nextFlow.status === 'screenout') {
       setEndMessage(nextFlow.message);
@@ -189,7 +196,7 @@ export default function PublicSurveyPage({ params }) {
 
         <form onSubmit={handleSubmit}>
           {flow.error && <p role="alert">Cấu hình khảo sát cần được người tạo kiểm tra lại.</p>}
-          <RespondentFields values={respondentInfo} onChange={(key, value) => setRespondentInfo(previous => ({ ...previous, [key]: value }))} />
+          <RespondentFields values={respondentInfo} onChange={(key, value) => {const next={...respondentInfo,[key]:value};setRespondentInfo(next);checkProject(next,answers);}} />
 
           <SurveyQuestions flow={flow} answers={answers} onChange={handleAnswerChange} />
 

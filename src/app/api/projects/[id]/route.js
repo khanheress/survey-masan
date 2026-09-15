@@ -1,3 +1,4 @@
+import { parseProjectRules, validateProjectRules, projectQuotaCounts } from '@/lib/projectRules.mjs';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
@@ -17,7 +18,7 @@ export async function GET(request, context) {
       WHERE p.id = ?
     `).get(id);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json(project, { status: 200 });
+    return NextResponse.json({...project,quota_counts:await projectQuotaCounts(db,id,parseProjectRules(project.rules_json))}, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -34,9 +35,10 @@ export async function PUT(request, context) {
     const existing = await db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    if(body.rules_json!==undefined){let rules;try{rules=parseProjectRules(body.rules_json);}catch{return NextResponse.json({error:'Điều kiện không hợp lệ'},{status:400});}const ruleError=validateProjectRules(rules);if(ruleError)return NextResponse.json({error:ruleError},{status:400});body.rules_json=JSON.stringify(rules);}
     const fields = [];
     const values = [];
-    const allowedFields = ['name', 'description', 'start_date', 'end_date', 'max_responses', 'status'];
+    const allowedFields = ['name', 'description', 'start_date', 'end_date', 'max_responses', 'status', 'rules_json'];
     for (const [key, value] of Object.entries(body)) {
       if (allowedFields.includes(key)) {
         fields.push(`${key} = ?`);

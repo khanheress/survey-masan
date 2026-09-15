@@ -1,3 +1,4 @@
+import {parseProjectRules,projectQuotaCounts} from '@/lib/projectRules.mjs';
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getSurveyAvailability } from '@/lib/surveyAvailability.mjs';
@@ -48,6 +49,9 @@ export async function GET(request, context) {
 
     return NextResponse.json({
       id: survey.id,
+      project_id: project.id,
+      project_rules:parseProjectRules(project.rules_json),
+      quota_counts:await projectQuotaCounts(db,project.id,parseProjectRules(project.rules_json)),
       title: survey.title,
       description: survey.description,
       fields_json: fieldsJson,

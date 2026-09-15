@@ -14,6 +14,7 @@ export async function GET(request) {
     const project_id = searchParams.get('project_id');
 
     const phone = searchParams.get('phone');
+    const inviter=searchParams.get('inviter'),sort=searchParams.get('sort');
 
     const db = await getDb();
     let query = `
@@ -30,6 +31,8 @@ export async function GET(request) {
 
     if (phone) {query += ' AND r.respondent_phone LIKE ?';params.push(`%${phone}%`);}
 
+    if(inviter){query+=' AND r.respondent_inviter = ?';params.push(inviter);}
+    query+=sort==='inviter_asc'?" ORDER BY COALESCE(r.respondent_inviter, '') ASC, r.created_at DESC":sort==='inviter_desc'?" ORDER BY COALESCE(r.respondent_inviter, '') DESC, r.created_at DESC":' ORDER BY r.created_at DESC';
     const responses = await db.prepare(query).all(...params);
 
     const flattened = responses.map((r) => {
@@ -42,6 +45,7 @@ export async function GET(request) {
         'Phone': r.respondent_phone,
         'Name': r.respondent_name,
         'Năm sinh': r.respondent_birth_year,
+        'Giới tính': r.respondent_gender,
         'Địa chỉ': r.respondent_address,
         'Nghề nghiệp hiện tại': r.respondent_occupation,
         'Tình trạng hôn nhân': r.respondent_marital_status,

@@ -18,6 +18,7 @@ export function duplicateItems(items) {
  const map=new Map(items.map(f=>[f.id,`${f.type==='section'?'section':'field'}_${crypto.randomUUID()}`]));
  return items.map(f=>{
   const copy=JSON.parse(JSON.stringify(f));copy.id=map.get(f.id);
+  if(copy.purpose==='bumo')delete copy.purpose;
   copy.label=copy.label.replace(/\{\{q:([^{}]+)\}\}/g,(_,id)=>`{{q:${map.get(id)||id}}}`);
   if(copy.type==='section')copy.label+=' (bản sao)';
   if(copy.description)copy.description=copy.description.replace(/\{\{q:([^{}]+)\}\}/g,(_,id)=>`{{q:${map.get(id)||id}}}`);

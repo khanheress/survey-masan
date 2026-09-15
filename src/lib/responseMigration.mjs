@@ -1,5 +1,9 @@
 export async function migrateResponseProfile(db) {
   const additions = {
+    respondent_gender: 'TEXT',
+    respondent_age: 'INTEGER',
+    respondent_bumo: "TEXT DEFAULT '[]'",
+    question_labels_json: "TEXT DEFAULT '{}'",
     respondent_birth_year: 'INTEGER',
     respondent_address: 'TEXT',
     respondent_occupation: 'TEXT',

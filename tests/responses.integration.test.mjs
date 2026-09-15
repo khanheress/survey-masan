@@ -1,4 +1,7 @@
-import { formatAnswer, validateAdvancedAnswer } from '../src/lib/surveyAdvanced.mjs';
+import ExcelJS from 'exceljs';
+import * as projectExport from '../src/lib/projectExport.mjs';
+import * as projectRules from '../src/lib/projectRules.mjs';
+import { formatAnswer, validateAdvancedAnswer, pipeText } from '../src/lib/surveyAdvanced.mjs';
 import * as surveyFlow from '../src/lib/surveyFlow.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +11,7 @@ import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 import Database from './support/database.mjs';
 import Papa from 'papaparse';
-import { validateRespondent, RESPONDENT_FIELDS } from '../src/lib/respondent.mjs';
+import { validateRespondent, RESPONDENT_FIELDS, INVITERS } from '../src/lib/respondent.mjs';
 import { migrateResponseProfile } from '../src/lib/responseMigration.mjs';
 import { initializeParticipantStore, recordParticipant, listParticipants } from '../src/lib/participantStore.mjs';
 import { getSurveyAvailability } from '../src/lib/surveyAvailability.mjs';
@@ -29,7 +32,7 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     ]));
     await migrateResponseProfile(db);
     await initializeParticipantStore(db);
-    const context = vm.createContext({ URL, console, Buffer });
+    const context = vm.createContext({ URL, console, Buffer, Response });
     let signedIn = true;
     let role = 'admin';
     const imports = {
@@ -38,8 +41,11 @@ test('submission, listing and CSV retain all profile fields and answers', async 
       '@/lib/authOptions': { authOptions: {} },
       '@/lib/db': { getDb: () => db },
       '@/lib/surveyFlow.mjs': surveyFlow,
-      '@/lib/surveyAdvanced.mjs': { formatAnswer, validateAdvancedAnswer },
-      '@/lib/respondent.mjs': { validateRespondent, RESPONDENT_FIELDS },
+      '@/lib/projectRules.mjs': projectRules,
+      '@/lib/projectExport.mjs': projectExport,
+      exceljs: {default:ExcelJS},
+      '@/lib/surveyAdvanced.mjs': { formatAnswer, validateAdvancedAnswer, pipeText },
+      '@/lib/respondent.mjs': { validateRespondent, RESPONDENT_FIELDS, INVITERS },
       '@/lib/participantStore.mjs': { recordParticipant, listParticipants },
       '@/lib/surveyAvailability.mjs': { getSurveyAvailability },
       uuid: { v4: randomUUID },
@@ -60,7 +66,7 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     }
     const route = await loadRoute('../src/app/api/responses/route.js');
     const payload = {
-      survey_id: 's', respondent_name: 'Nguyễn An', respondent_birth_year: '1990', respondent_phone: '0900000000',
+      survey_id: 's', respondent_gender: 'Nam', respondent_name: 'Nguyễn An', respondent_birth_year: '1990', respondent_phone: '0900000000',
       respondent_address: '12 đường A, phường B', respondent_occupation: 'Nhân viên "văn phòng"',
       respondent_marital_status: 'Đã kết hôn - có con', respondent_inviter: 'Tế', answers_json: { q1: ['A', 'B'], q2: 'Câu trả lời' }
     };
@@ -163,5 +169,43 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     assert.equal(download.headers.get('Cache-Control'),'private, no-store');
     assert.deepEqual(Buffer.from(await download.arrayBuffer()),fileBytes);
     assert.equal((await downloadRoute.GET(new Request('http://localhost/file'),{params:Promise.resolve({id:uploadId,fieldId:'missing'})})).status,404);
+    // Configure project quotas, then compete for the final slot across concurrent submissions.
+    await projectRules.migrateProjectRules(db);
+    await db.exec("ALTER TABLE projects ADD COLUMN created_at TEXT; ALTER TABLE surveys ADD COLUMN created_at TEXT;");
+    await db.prepare('DELETE FROM responses').run();
+    const rules=projectRules.emptyProjectRules();rules.gender={enabled:true,quotas:{Nam:1,'Nữ':2}};
+    rules.age={enabled:true,bands:[{min:18,max:45,quota:3}]};rules.bumo={enabled:true,products:[{name:'Sting',quota:3}]};
+    await db.prepare('UPDATE projects SET rules_json = ?, max_responses = 0').run(JSON.stringify(rules));
+    await db.prepare('UPDATE surveys SET fields_json = ?').run(JSON.stringify([{id:'brand',type:'multiple_choice',purpose:'bumo',label:'Thương hiệu dùng thường xuyên nhất?',options:['Sting','Khác'],required:true},{id:'why',type:'short_text',label:'Vì sao chọn {{q:brand}}?'}]));
+    const contestant={...payload,respondent_birth_year:new Date().getFullYear()-25,answers_json:{brand:'Sting',why:'=1+1'}};
+    const concurrent=await Promise.all(['0911111111','0922222222'].map(phone=>route.POST(request({...contestant,respondent_phone:phone}))));
+    assert.deepEqual(concurrent.map(r=>r.status).sort(),[201,422]);
+    const rejection=await concurrent.find(r=>r.status===422).json();assert.match(rejection.error,/liên hệ lại.*Tế/);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n,1);
+    assert.equal((await route.POST(request({...contestant,respondent_phone:'0933333333',respondent_gender:'Nữ',answers_json:{brand:'Khác'}}))).status,422);
+    assert.equal((await route.POST(request({...contestant,respondent_phone:'0933333333',respondent_gender:'Nữ',respondent_birth_year:1950}))).status,422);
+    assert.equal((await route.POST(request({...contestant,respondent_phone:'0933333333',respondent_gender:'Nữ',respondent_inviter:'Khánh'}))).status,201);
+    const first=await db.prepare("SELECT * FROM responses WHERE respondent_gender = 'Nam'").get();
+    await db.prepare('UPDATE surveys SET fields_json = ?').run(JSON.stringify([{id:'brand',type:'multiple_choice',purpose:'bumo',label:'Tên đã đổi',options:['Sting'],required:true}]));
+    const filtered=await(await route.GET(new Request('http://localhost/api/responses?inviter=Khánh&sort=inviter_asc'))).json();assert.equal(filtered.pagination.total,1);assert.equal(filtered.responses[0].question_labels.brand,'Thương hiệu dùng thường xuyên nhất?');assert.equal(filtered.responses[0].question_labels.why,'Vì sao chọn Sting?');
+    const sorted=await(await route.GET(new Request('http://localhost/api/responses?sort=inviter_asc'))).json();assert.deepEqual(sorted.responses.map(r=>r.respondent_inviter),['Khánh','Tế']);
+    const counts=await projectRules.projectQuotaCounts(db,'p',rules);assert.equal(counts.gender.Nam,1);assert.equal(counts.gender['Nữ'],1);assert.equal(counts.bumo.Sting,2);
+    await deleteRoute.DELETE(new Request('http://localhost/delete',{method:'DELETE'}),{params:Promise.resolve({id:first.id})});
+    assert.equal((await route.POST(request({...contestant,respondent_phone:'0944444444',answers_json:{brand:'Sting'}}))).status,201);
+    // All rows exported, even beyond the response page size; selected columns only, safe string cells.
+    for(let i=0;i<12;i++)await db.prepare('INSERT INTO responses (id,project_id,survey_id,respondent_name,respondent_inviter,data_json,created_at) VALUES (?,?,?,?,?,?,?)').run('extra'+i,'p','s','Người '+i,'Khánh','{"why":"=1+1"}','2026-08-31 17:00:00');
+    const xlsx=await loadRoute('../src/app/api/projects/[id]/export/route.js'),projectContext={params:Promise.resolve({id:'p'})};
+    const metadata=await(await xlsx.GET(new Request('http://localhost/export'),projectContext)).json();assert.equal(metadata.total,14);
+    const why=metadata.columns.find(c=>c.questionId==='why');assert.ok(why);assert.ok(metadata.columns.some(c=>c.key==='respondent_gender'));
+    const fileResponse=await xlsx.POST(request({columns:['respondent_name',why.key]}),projectContext);assert.equal(fileResponse.status,200);
+    const book=new ExcelJS.Workbook();await book.xlsx.load(Buffer.from(await fileResponse.arrayBuffer()));const sheet=book.worksheets[0];assert.equal(sheet.columnCount,2);assert.equal(sheet.rowCount,15);assert.equal(sheet.getCell('A1').value,'Tên');assert.equal(sheet.getCell('B2').type,ExcelJS.ValueType.String);assert.equal(sheet.getCell('B2').value,'=1+1');
+    assert.equal((await xlsx.POST(request({columns:['bad']}),projectContext)).status,400);
+    signedIn=false;assert.equal((await xlsx.GET(new Request('http://localhost/export'),projectContext)).status,401);assert.equal((await xlsx.POST(request({columns:['respondent_name']}),projectContext)).status,401);signedIn=true;
+    await db.prepare("UPDATE responses SET created_at='2026-08-31 16:59:59' WHERE id='extra0'").run();
+    await db.prepare("UPDATE responses SET created_at='2026-09-15 01:00:00' WHERE id NOT LIKE 'extra%'").run();
+    const stats=await loadRoute('../src/app/api/stats/route.js');const september=await(await stats.GET(new Request('http://localhost/api/stats?month=2026-09'))).json();
+    assert.ok(september.stats);assert.equal(september.monthly_inviters.find(i=>i.inviter==='Khánh').count,12); // 11 boundary fixtures + one real response in September 2026.
+    const august=await(await stats.GET(new Request('http://localhost/api/stats?month=2026-08'))).json();assert.equal(august.monthly_inviters.find(i=>i.inviter==='Khánh').count,1);
+    assert.equal((await stats.GET(new Request('http://localhost/api/stats?month=2026-99'))).status,400);
   } finally {await db.close();}
 });

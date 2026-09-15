@@ -1,3 +1,4 @@
+import { parseProjectRules, validateProjectRules } from '@/lib/projectRules.mjs';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
@@ -28,11 +29,13 @@ export async function POST(request) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
     const { name, description, start_date, end_date, max_responses, status } = body;
+    let rules;try { rules=parseProjectRules(body.rules_json); } catch { return NextResponse.json({error:'Điều kiện không hợp lệ'},{status:400}); }
+    const ruleError=validateProjectRules(rules);if(ruleError)return NextResponse.json({error:ruleError},{status:400});
     const db = await getDb();
     const id = uuidv4();
     const created_by = session.user.id;
-    const insert = db.prepare('INSERT INTO projects (id, name, description, start_date, end_date, max_responses, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    await insert.run(id, name, description || null, start_date, end_date, max_responses || 0, status || 'active', created_by);
+    const insert = db.prepare('INSERT INTO projects (id, name, description, start_date, end_date, max_responses, status, created_by, rules_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    await insert.run(id, name, description || null, start_date, end_date, max_responses || 0, status || 'active', created_by, JSON.stringify(rules));
     const newProject = await db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
     return NextResponse.json(newProject, { status: 201 });
   } catch (error) {

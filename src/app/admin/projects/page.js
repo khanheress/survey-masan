@@ -1,6 +1,8 @@
 'use client';
 
 import Icon from '@/components/Icon';
+import ProjectRulesEditor from '@/components/ProjectRulesEditor';
+import {emptyProjectRules,parseProjectRules} from '@/lib/projectRules.mjs';
 import useRemoteData from '@/hooks/useRemoteData';
 
 import React, { useState, useCallback } from 'react';
@@ -27,7 +29,7 @@ export default function ProjectsPage() {
     start_date: '',
     end_date: '',
     max_responses: '',
-    status: 'active'
+    status: 'active', rules_json: emptyProjectRules()
   });
   const [formLoading, setFormLoading] = useState(false);
 
@@ -46,7 +48,7 @@ export default function ProjectsPage() {
   };
 
   const openCreateModal = () => {
-    setFormData({ name: '', description: '', start_date: '', end_date: '', max_responses: '', status: 'active' });
+    setFormData({ name: '', description: '', start_date: '', end_date: '', max_responses: '', status: 'active', rules_json:emptyProjectRules() });
     setIsCreateModalOpen(true);
   };
 
@@ -58,6 +60,7 @@ export default function ProjectsPage() {
       start_date: project.start_date ? project.start_date.split('T')[0] : '',
       end_date: project.end_date ? project.end_date.split('T')[0] : '',
       max_responses: project.max_responses || '',
+      rules_json:parseProjectRules(project.rules_json),
       status: project.status
     });
     setIsEditModalOpen(true);
@@ -172,6 +175,7 @@ export default function ProjectsPage() {
           </select>
         </div>
       </div>
+      <ProjectRulesEditor value={formData.rules_json} onChange={rules_json=>setFormData({...formData,rules_json})}/>
     </>
   );
 
@@ -202,7 +206,7 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid-cols-3">
           {projects.map(project => {
-            const progress = project.max_responses ? Math.min(100, Math.round(((project.responseCount || 0) / project.max_responses) * 100)) : 0;
+            const progress = project.max_responses ? Math.min(100, Math.round(((project.response_count || 0) / project.max_responses) * 100)) : 0;
             return (
               <div key={project.id} className="card" style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer' }} onClick={() => router.push(`/admin/projects/${project.id}`)}>
                 <div className="flex-between" style={{ marginBottom: '1rem' }}>
@@ -230,7 +234,7 @@ export default function ProjectsPage() {
                   <div style={{ marginBottom: '1rem' }}>
                     <div className="flex-between" style={{ fontSize: '0.75rem', marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>
                       <span>Tiến độ</span>
-                      <span>{project.responseCount || 0} / {project.max_responses}</span>
+                      <span>{project.response_count || 0} / {project.max_responses}</span>
                     </div>
                     <div style={{ height: '6px', background: 'var(--bg-tertiary)', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${progress}%`, background: 'var(--accent-gradient)', borderRadius: '3px' }}></div>
@@ -239,8 +243,8 @@ export default function ProjectsPage() {
                 )}
 
                 <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Icon name="chart" /> {project.surveyCount || 0} khảo sát</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Icon name="file" /> {project.responseCount || 0} phản hồi</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Icon name="chart" /> {project.survey_count || 0} khảo sát</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Icon name="file" /> {project.response_count || 0} phản hồi</span>
                 </div>
               </div>
             );

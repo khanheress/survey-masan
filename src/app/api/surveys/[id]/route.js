@@ -1,3 +1,4 @@
+import {parseProjectRules, bumoQuestion} from '@/lib/projectRules.mjs';
 import { parseSurveyFields, validateSurveyFields } from '@/lib/surveyFlow.mjs';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
@@ -50,6 +51,10 @@ export async function PUT(request, context) {
       try { definition = parseSurveyFields(body.fields_json ?? existing.fields_json); } catch { return NextResponse.json({ error: 'Danh sách câu hỏi không hợp lệ' }, { status: 400 }); }
       const definitionError = validateSurveyFields(definition);
       if (definitionError) return NextResponse.json({ error: definitionError }, { status: 400 });
+      if(body.is_published || (existing.is_published && body.is_published !== 0)) {
+        const project=await db.prepare('SELECT * FROM projects WHERE id = ?').get(existing.project_id);
+        if(parseProjectRules(project?.rules_json).bumo.enabled && !bumoQuestion(definition))return NextResponse.json({error:'Dự án đang xét BUMO. Hãy đánh dấu một câu hỏi lựa chọn làm câu BUMO trước khi phát hành.'},{status:400});
+      }
     }
     const fields = [];
     const values = [];

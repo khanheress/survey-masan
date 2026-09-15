@@ -1,6 +1,7 @@
 'use client';
 
 import Icon from '@/components/Icon';
+import {INVITERS} from '@/lib/respondent.mjs';
 import SurveyAnswerValue from '@/components/SurveyAnswerValue';
 import { useSession } from 'next-auth/react';
 import RespondentDetails from '@/components/RespondentDetails';
@@ -27,6 +28,8 @@ export default function ResponsesPage() {
   const [selectedProject, setSelectedProject] = useState('');
   const [selectedSurvey, setSelectedSurvey] = useState('');
   const [phoneSearch, setPhoneSearch] = useState('');
+  const [inviter,setInviter]=useState('');
+  const [sort,setSort]=useState('newest');
   
   // Modals
   const [selectedResponse, setSelectedResponse] = useState(null);
@@ -64,11 +67,13 @@ export default function ResponsesPage() {
     if (selectedProject) params.append('project_id', selectedProject);
     if (selectedSurvey) params.append('survey_id', selectedSurvey);
     if (phoneSearch) params.append('phone', phoneSearch);
+    if(inviter)params.set('inviter',inviter);
+    params.set('sort',sort);
     const res = await fetch(`/api/responses?${params.toString()}`, { signal });
     if (!res.ok) throw new Error('Failed to load responses');
     const data = await res.json();
     return { responses: data.responses || [], pagination: data.pagination || emptyResponses.pagination };
-  }, [selectedProject, selectedSurvey, phoneSearch, page]);
+  }, [selectedProject, selectedSurvey, phoneSearch, page, inviter, sort]);
   const { data, loading, error, refresh } = useRemoteData(
     loadResponses, emptyResponses, 'Lỗi khi tải dữ liệu'
   );
@@ -99,6 +104,8 @@ export default function ResponsesPage() {
     if (selectedProject) params.set('project_id', selectedProject);
     if (selectedSurvey) params.set('survey_id', selectedSurvey);
     if (phoneSearch) params.set('phone', phoneSearch);
+    if(inviter)params.set('inviter',inviter);
+    params.set('sort',sort);
     try {
       await downloadCsv(`/api/responses/export?${params.toString()}`);
     } catch (error) {
@@ -109,7 +116,7 @@ export default function ResponsesPage() {
   const clearFilters = () => {
     setSelectedProject('');
     setSelectedSurvey('');
-    setPhoneSearch('');
+    setPhoneSearch('');setInviter('');setSort('newest');
     setPage(1);
   };
 
@@ -146,6 +153,10 @@ export default function ResponsesPage() {
         </div>
       </div>
 
+      <div className="editor-grid" style={{marginBottom:'1rem'}}>
+        <label className="form-label">Người mời<select aria-label="Người mời" className="form-select" value={inviter} onChange={e=>{setInviter(e.target.value);setPage(1);}}><option value="">Tất cả người mời</option>{INVITERS.map(v=><option key={v}>{v}</option>)}</select></label>
+        <label className="form-label">Sắp xếp<select aria-label="Sắp xếp" className="form-select" value={sort} onChange={e=>{setSort(e.target.value);setPage(1);}}><option value="newest">Mới nhất</option><option value="inviter_asc">Người mời A → Z</option><option value="inviter_desc">Người mời Z → A</option></select></label>
+      </div>
       <div className="response-layout">
         <div>
           {loading ? (
@@ -165,7 +176,7 @@ export default function ResponsesPage() {
                   <thead>
                     <tr>
                       <th>Tên</th>
-                      <th>SĐT</th>
+                      <th>SĐT</th><th>Người mời</th>
                       <th>Email</th>
                       <th>Dự án</th>
                       <th>Khảo sát</th>
@@ -177,7 +188,7 @@ export default function ResponsesPage() {
                     {responses.map(response => (
                       <tr key={response.id} onClick={() => setSelectedResponse(response)} style={{ cursor: 'pointer' }}>
                         <td style={{ fontWeight: 500 }}>{response.respondent_name || 'Ẩn danh'}</td>
-                        <td>{response.respondent_phone || '-'}</td>
+                        <td>{response.respondent_phone || '-'}</td><td>{response.respondent_inviter || '—'}</td>
                         <td>{response.respondent_email || '-'}</td>
                         <td>{response.projectName}</td>
                         <td>{response.surveyName}</td>
@@ -216,7 +227,7 @@ export default function ResponsesPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {Object.entries(selectedResponse.answers_json || {}).map(([questionId, answer]) => (
                 <div key={questionId}>
-                  <div style={{ fontWeight: 500, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>{questionId}</div>
+                  <div style={{ fontWeight: 500, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>{selectedResponse.question_labels?.[questionId] || 'Câu hỏi không còn trong bản khảo sát hiện tại'}</div>
                   <div style={{ background: 'var(--bg-glass)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
                     <SurveyAnswerValue value={answer} />
                   </div>

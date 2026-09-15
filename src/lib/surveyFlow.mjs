@@ -20,10 +20,12 @@ export function parseSurveyFields(value) {
 }
 export function validateSurveyFields(fields) {
   if (!Array.isArray(fields) || fields.length > 500) return 'Khảo sát chỉ được có tối đa 500 câu hỏi và phần.';
+  if (fields.filter(f=>f.purpose==='bumo').length>1) return 'Mỗi khảo sát chỉ được chọn một câu BUMO.';
   const ids = new Map();
   for (const [i, f] of fields.entries()) {
     if (!f || typeof f.id !== 'string' || !f.id || [...SPECIAL, '__proto__', 'constructor', 'prototype'].includes(f.id) || ids.has(f.id) || !TYPES.includes(f.type)) return 'Câu hỏi hoặc mã câu hỏi không hợp lệ / bị trùng.';
     if (typeof f.label !== 'string' || !f.label.trim()) return 'Hãy nhập tiêu đề cho tất cả câu hỏi và phần.';
+    if (f.purpose==='bumo' && !['multiple_choice','dropdown','checkbox'].includes(f.type)) return 'Câu BUMO phải là câu một hoặc nhiều lựa chọn.';
     ids.set(f.id, i);
     const advancedError = validateAdvancedDefinition(f, fields, i);
     if (advancedError) return advancedError;

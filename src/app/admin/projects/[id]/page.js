@@ -1,6 +1,9 @@
 'use client';
 
 import Icon from '@/components/Icon';
+import ProjectProgress from '@/components/ProjectProgress';
+import ProjectExport from '@/components/ProjectExport';
+import SurveyAnswerValue from '@/components/SurveyAnswerValue';
 import RespondentDetails from '@/components/RespondentDetails';
 import { downloadCsv } from '@/lib/downloadCsv';
 import useRemoteData from '@/hooks/useRemoteData';
@@ -77,6 +80,9 @@ export default function ProjectDetailPage({ params }) {
       if (res.ok) {
         addToast(`Đã ${survey.is_published ? 'ẩn' : 'công khai'} khảo sát`, 'success');
         fetchProjectData();
+      } else {
+        const result = await res.json();
+        addToast(result.error || 'Không thể cập nhật trạng thái khảo sát.', 'error');
       }
     } catch (error) {
       addToast('Lỗi khi cập nhật trạng thái', 'error');
@@ -131,7 +137,7 @@ export default function ProjectDetailPage({ params }) {
           </div>
           <div style={{ background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Số phản hồi</div>
-            <div style={{ fontWeight: 600 }}>{responses.length} {project.max_responses ? `/ ${project.max_responses}` : ''}</div>
+            <div style={{ fontWeight: 600 }}>{project.response_count || 0} {project.max_responses ? `/ ${project.max_responses}` : ''}</div>
           </div>
           <div style={{ background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Số khảo sát</div>
@@ -140,6 +146,8 @@ export default function ProjectDetailPage({ params }) {
         </div>
       </div>
 
+      <section className="card" style={{marginBottom:'1rem'}}><h2>Tiến độ chỉ tiêu</h2><ProjectProgress project={project}/></section>
+      <ProjectExport projectId={id}/>
       <div style={{ borderBottom: '1px solid var(--border-color)', marginBottom: '2rem', display: 'flex', gap: '2rem' }}>
         <button 
           className="btn-ghost" 
@@ -303,9 +311,9 @@ export default function ProjectDetailPage({ params }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {Object.entries(selectedResponse.answers_json || {}).map(([questionId, answer]) => (
                 <div key={questionId}>
-                  <div style={{ fontWeight: 500, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Câu hỏi ID: {questionId}</div>
+                  <div style={{ fontWeight: 500, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>{selectedResponse.question_labels?.[questionId] || 'Câu hỏi không còn trong bản khảo sát hiện tại'}</div>
                   <div style={{ background: 'var(--bg-glass)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
-                    {Array.isArray(answer) ? answer.join(', ') : (answer?.toString() || '-')}
+                    <SurveyAnswerValue value={answer} />
                   </div>
                 </div>
               ))}

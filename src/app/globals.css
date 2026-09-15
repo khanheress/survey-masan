@@ -738,3 +738,10 @@ button, input, select, textarea { font-size: 0.875rem; }
 .file-question-actions { display:flex; gap:.5rem; flex-wrap:wrap; margin:.75rem 0; }
 @media(max-width:1200px){.question-summary-row{flex-direction:column}.question-actions{align-self:flex-end;flex-wrap:wrap}.section-builder-layout{grid-template-columns:190px minmax(0,1fr)}}
 @media(max-width:760px){.section-builder-layout{grid-template-columns:1fr}.section-list{position:static;max-height:260px}.editor-grid{grid-template-columns:1fr}.question-actions{align-self:stretch}.question-actions .form-select{flex:1}.section-settings,.section-question-card,.question-palette{padding:1rem}.structured-answer-row{grid-template-columns:1fr}}
+
+.project-rules-editor {border-top:1px solid var(--border-color);margin-top:1.5rem;padding-top:1.25rem;}
+.project-rules-editor > .question-required {display:flex;gap:.6rem;align-items:center;margin:1.2rem 0 .65rem;font-weight:600;}
+.project-rules-editor .condition-row {margin:.7rem 0;}
+
+.project-rules-editor .condition-row > label {display:flex;flex-direction:column;gap:.35rem;flex:1 1 120px;font-size:.875rem;color:var(--text-secondary);}
+.project-rules-editor .condition-row > label > input {flex:none;width:100%;}

@@ -1,0 +1,19 @@
+'use client';
+import {parseProjectRules} from '@/lib/projectRules.mjs';
+export default function ProjectRulesEditor({value,onChange}){
+ const rules=parseProjectRules(value),set=(key,patch)=>onChange({...rules,[key]:{...rules[key],...patch}});
+ const quota=v=>v===''?null:Number(v);
+ return <div className="project-rules-editor"><h3>Điều kiện và chỉ tiêu dự án</h3><p className="survey-flow-note">Các điều kiện đang bật được xét đồng thời. Để trống chỉ tiêu nếu không giới hạn; nhập 0 để không nhận nhóm đó.</p>
+  <label className="question-required"><input type="checkbox" checked={rules.gender.enabled} onChange={e=>set('gender',{enabled:e.target.checked})}/> Xét theo giới tính</label>
+  {rules.gender.enabled&&<div className="editor-grid">{['Nam','Nữ'].map(g=><label className="form-label" key={g}>Chỉ tiêu {g}<input aria-label={`Chỉ tiêu ${g}`} className="form-input" type="number" min={0} value={rules.gender.quotas[g]??''} onChange={e=>set('gender',{quotas:{...rules.gender.quotas,[g]:quota(e.target.value)}})} placeholder="Không giới hạn"/></label>)}</div>}
+  <label className="question-required"><input type="checkbox" checked={rules.age.enabled} onChange={e=>set('age',{enabled:e.target.checked})}/> Xét theo nhóm tuổi</label>
+  {rules.age.enabled&&<><p className="survey-flow-note">Tuổi = năm hiện tại theo giờ Việt Nam − năm sinh. Chỉ nhận các nhóm dưới đây.</p>{rules.age.bands.map((b,i)=><div className="condition-row" key={i}>
+   <label>Từ tuổi<input className="form-input" type="number" min={0} max={130} value={b.min} onChange={e=>set('age',{bands:rules.age.bands.map((x,j)=>i===j?{...x,min:Number(e.target.value)}:x)})}/></label>
+   <label>Đến tuổi<input className="form-input" type="number" min={0} max={130} value={b.max} onChange={e=>set('age',{bands:rules.age.bands.map((x,j)=>i===j?{...x,max:Number(e.target.value)}:x)})}/></label>
+   <label>Chỉ tiêu<input className="form-input" type="number" min={0} value={b.quota??''} placeholder="Không giới hạn" onChange={e=>set('age',{bands:rules.age.bands.map((x,j)=>i===j?{...x,quota:quota(e.target.value)}:x)})}/></label><button type="button" className="btn btn-ghost" onClick={()=>set('age',{bands:rules.age.bands.filter((_,j)=>i!==j)})}>Xóa nhóm</button>
+  </div>)}<button type="button" className="btn btn-secondary" onClick={()=>set('age',{bands:[...rules.age.bands,{min:18,max:25,quota:null}]})}>+ Thêm nhóm tuổi</button></>}
+  <label className="question-required"><input type="checkbox" checked={rules.bumo.enabled} onChange={e=>set('bumo',{enabled:e.target.checked})}/> Xét theo BUMO sản phẩm</label>
+  {rules.bumo.enabled&&<><p className="survey-flow-note">Trong trình tạo câu hỏi, đánh dấu một câu là BUMO. Tên sản phẩm bên dưới cần trùng chính xác với đáp án. Người chọn ít nhất một sản phẩm được nhận; nếu chọn nhiều sản phẩm thì chỉ tiêu của từng sản phẩm đó đều được xét.</p>{rules.bumo.products.map((p,i)=><div className="condition-row" key={i}><input aria-label="Sản phẩm BUMO" className="form-input" value={p.name} onChange={e=>set('bumo',{products:rules.bumo.products.map((x,j)=>i===j?{...x,name:e.target.value}:x)})} placeholder="Tên sản phẩm"/><input aria-label="Chỉ tiêu sản phẩm" className="form-input" type="number" min={0} value={p.quota??''} placeholder="Chỉ tiêu (không bắt buộc)" onChange={e=>set('bumo',{products:rules.bumo.products.map((x,j)=>i===j?{...x,quota:quota(e.target.value)}:x)})}/><button type="button" className="btn btn-ghost" onClick={()=>set('bumo',{products:rules.bumo.products.filter((_,j)=>i!==j)})}>Xóa</button></div>)}<button type="button" className="btn btn-secondary" onClick={()=>set('bumo',{products:[...rules.bumo.products,{name:'',quota:null}]})}>+ Thêm sản phẩm</button></>}
+  <p className="survey-flow-note">Khi không đáp ứng điều kiện hoặc chỉ tiêu đã đủ, người điền được yêu cầu liên hệ lại với người mời khảo sát.</p>
+ </div>;
+}

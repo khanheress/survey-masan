@@ -5,12 +5,12 @@ import { validateRespondent, RESPONDENT_FIELDS, MARITAL_STATUSES, INVITERS } fro
 import { migrateResponseProfile } from '../src/lib/responseMigration.mjs';
 
 const valid = {
-  respondent_name: ' Nguyễn An ', respondent_birth_year: '1990', respondent_phone: '0900000000',
+  respondent_gender: 'Nam', respondent_name: ' Nguyễn An ', respondent_birth_year: '1990', respondent_phone: '0900000000',
   respondent_address: 'Địa chỉ kiểm thử', respondent_occupation: 'Nhân viên văn phòng',
   respondent_marital_status: 'Độc thân', respondent_inviter: 'Khánh'
 };
 
-test('all seven fields are mandatory, including whitespace-only values', () => {
+test('all profile fields are mandatory, including whitespace-only values', () => {
   for (const { key } of RESPONDENT_FIELDS) {
     for (const empty of ['', '   ', null, undefined]) {
       assert.ok(validateRespondent({ ...valid, [key]: empty }).error, key);
@@ -56,3 +56,5 @@ test('inviter accepts only Khánh or Tế', () => {
   }
   assert.ok(validateRespondent({ ...valid, respondent_inviter: 'Khác' }).error);
 });
+
+test('gender is required and accepts only Nam or Nữ',()=>{for(const gender of ['Nam','Nữ'])assert.equal(validateRespondent({...valid,respondent_gender:gender}).values.respondent_gender,gender);for(const gender of ['',null,'Khác'])assert.ok(validateRespondent({...valid,respondent_gender:gender}).error);});

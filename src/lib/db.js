@@ -1,3 +1,4 @@
+import { migrateProjectRules } from './projectRules.mjs';
 import path from 'path';
 import { withDatabaseStage } from './databaseDiagnostic.mjs';
 import { initializeRecallStore } from './recallStore.mjs';
@@ -53,6 +54,7 @@ async function initializeDb(dbInstance) {
     );
   `));
 
+  await migrateProjectRules(dbInstance);
   await withDatabaseStage('response_migration', () => migrateResponseProfile(dbInstance));
   await withDatabaseStage('participant_migration', () => initializeParticipantStore(dbInstance));
   await withDatabaseStage('recall_schema', () => initializeRecallStore(dbInstance));

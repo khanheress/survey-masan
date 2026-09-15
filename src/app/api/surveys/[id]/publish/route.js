@@ -1,3 +1,4 @@
+import {parseProjectRules,bumoQuestion} from '@/lib/projectRules.mjs';
 import { parseSurveyFields, validateSurveyFields } from '@/lib/surveyFlow.mjs';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
@@ -19,6 +20,8 @@ export async function POST(request, context) {
       try { definition = parseSurveyFields(survey.fields_json); } catch { return NextResponse.json({ error: 'Danh sách câu hỏi không hợp lệ' }, { status: 400 }); }
       const definitionError = validateSurveyFields(definition);
       if (definitionError) return NextResponse.json({ error: definitionError }, { status: 400 });
+      const project=await db.prepare('SELECT * FROM projects WHERE id = ?').get(survey.project_id);
+      if(parseProjectRules(project?.rules_json).bumo.enabled && !bumoQuestion(definition))return NextResponse.json({error:'Dự án đang xét BUMO. Hãy đánh dấu một câu hỏi lựa chọn làm câu BUMO trước khi phát hành.'},{status:400});
     }
     const newStatus = survey.is_published === 1 ? 0 : 1;
     await db.prepare('UPDATE surveys SET is_published = ? WHERE id = ?').run(newStatus, id);

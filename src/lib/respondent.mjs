@@ -1,9 +1,12 @@
 export const MARITAL_STATUSES = ['Độc thân', 'Đã kết hôn - chưa con', 'Đã kết hôn - có con'];
 
+export const GENDERS = ['Nam', 'Nữ'];
+
 export const INVITERS = ['Khánh', 'Tế'];
 
 export const RESPONDENT_FIELDS = [
   { key: 'respondent_name', label: 'Tên', type: 'text', placeholder: 'Nhập họ và tên', autoComplete: 'name', maxLength: 200 },
+  { key: 'respondent_gender', label: 'Giới tính', type: 'select', options: GENDERS },
   { key: 'respondent_birth_year', label: 'Năm sinh', type: 'number', placeholder: 'Ví dụ: 1990', autoComplete: 'bday-year' },
   { key: 'respondent_phone', label: 'Số điện thoại', type: 'tel', placeholder: 'Nhập số điện thoại', autoComplete: 'tel', maxLength: 30 },
   { key: 'respondent_address', label: 'Địa chỉ', type: 'text', placeholder: 'Nhập địa chỉ hiện tại', autoComplete: 'street-address', maxLength: 1000 },
