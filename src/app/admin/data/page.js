@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from 'react';
 import Icon from '@/components/Icon';
+import {useSession} from 'next-auth/react';
+import EditParticipant from '@/components/EditParticipant';
 import Modal from '@/components/Modal';
 import RespondentDetails from '@/components/RespondentDetails';
 import { useToast } from '@/components/Toast';
@@ -14,6 +16,8 @@ const formatDate = value => new Date(value.includes('T') ? value : `${value.repl
 
 export default function DataPage() {
   const { addToast } = useToast();
+  const {data:session}=useSession();
+  const [editing,setEditing]=useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [filters, setFilters] = useState({ search: '', project_id: '', inviter: '', page: 1 });
   const [selectedPerson, setSelectedPerson] = useState(null);
@@ -77,7 +81,7 @@ export default function DataPage() {
 
       <div className="data-list-header">
         <p aria-live="polite">{loading ? 'Đang tải…' : `${data.pagination.total} hồ sơ`}</p>
-        <span>Gộp theo số điện thoại · Thông tin từ lần gửi gần nhất</span>
+        <span>Gộp theo số điện thoại · Có thể chỉnh sửa hồ sơ</span>
       </div>
 
       {loading ? <div className="skeleton" style={{ height: 280 }} /> : error ? (
@@ -88,7 +92,7 @@ export default function DataPage() {
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table participant-table">
-              <thead><tr><th>Tên / Số điện thoại</th><th>Năm sinh</th><th>Nghề nghiệp</th><th>Người mời gần nhất</th><th>Dự án đã tham gia</th><th>Gần nhất</th><th>Chi tiết</th></tr></thead>
+              <thead><tr><th>Tên / Số điện thoại</th><th>Năm sinh</th><th>Nghề nghiệp</th><th>Người mời gần nhất</th><th>Dự án đã tham gia</th><th>Gần nhất</th><th>Thao tác</th></tr></thead>
               <tbody>{data.participants.map(person => (
                 <tr key={person.id}>
                   <td><strong>{person.respondent_name || 'Chưa có tên'}</strong><div className="data-description">{person.respondent_phone || 'Chưa có số điện thoại'}</div></td>
@@ -97,7 +101,7 @@ export default function DataPage() {
                   <td>{person.respondent_inviter || '—'}</td>
                   <td><div className="data-project-tags">{person.projects.map(project => <span className="badge badge-completed" key={project.id || project.name}>{project.name}</span>)}</div></td>
                   <td>{formatDate(person.last_seen)}</td>
-                  <td><button className="btn btn-secondary btn-sm" onClick={() => setSelectedPerson(person)} aria-label={`Xem hồ sơ ${person.respondent_name || person.respondent_phone || ''}`}>Xem</button></td>
+                  <td><button className="btn btn-secondary btn-sm" onClick={() => setSelectedPerson(person)} aria-label={`Xem hồ sơ ${person.respondent_name || person.respondent_phone || ''}`}>Xem</button>{session?.user?.role==='admin'&&<button className="btn btn-secondary btn-sm" style={{marginLeft:8}} aria-label={`Sửa hồ sơ ${person.respondent_name || person.respondent_phone || ''}`} onClick={()=>setEditing(person)}>Chỉnh sửa</button>}</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -112,6 +116,7 @@ export default function DataPage() {
         </div>
       )}
 
+      {editing&&<EditParticipant person={editing} onClose={()=>setEditing(null)} onSaved={()=>{setEditing(null);setSelectedPerson(null);refresh();addToast('Đã cập nhật hồ sơ','success');}}/>}
       <Modal isOpen={!!selectedPerson} onClose={() => setSelectedPerson(null)} title="Hồ sơ người tham gia" size="lg">
         {selectedPerson && <>
           <RespondentDetails response={{ ...selectedPerson, created_at: selectedPerson.last_seen }} />

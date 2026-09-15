@@ -27,3 +27,15 @@ Trong chi tiết dự án, chọn **Xuất Excel (.xlsx)**, đánh dấu các m�
 ## Triển khai
 
 Commit và push các thay đổi, bao gồm `package.json` và `package-lock.json`, để Vercel cài thư viện xuất Excel. Các cột dữ liệu mới được bổ sung tự động khi ứng dụng kết nối database; không cần chạy SQL thủ công. Cần giữ nguyên cấu hình Turso hiện có trên hosting.
+
+## Duyệt tham gia và sửa hồ sơ
+
+Trong **Quản lý phản hồi → Thao tác**, quản trị viên chọn **Chờ duyệt**, **Cho tham gia**, hoặc **Không cho tham gia**. Trạng thái có thể thay đổi lại; phản hồi không bị xóa và không chặn số điện thoại gửi vào các khảo sát khác. Có bộ lọc trạng thái, và cột trạng thái trong CSV/Excel/Google Sheets.
+
+Trạng thái duyệt là quyết định tuyển người tham gia sau khi thu thập. Chỉ tiêu đầu vào và thống kê số phản hồi vẫn tính các phản hồi đã gửi, bao gồm phản hồi chờ duyệt hoặc không được chọn. Muốn bỏ hẳn phản hồi và trả lại chỉ tiêu thì dùng thao tác xóa phản hồi.
+
+Trong **Quản lý data**, dùng **Chỉnh sửa** ở từng dòng hồ sơ. Thay đổi chỉ cập nhật hồ sơ quản lý, không thay các phản hồi lịch sử. Thông tin đã chỉnh sửa được ưu tiên giữ lại khi có lần gửi sau cùng số điện thoại. Đổi số điện thoại giữ nguyên lịch sử và bị từ chối nếu số mới đã thuộc hồ sơ khác.
+
+Nút **Xóa dự án** có ở danh sách dự án và trang chi tiết dự án. Chỉ quản trị viên được xóa, và cần xác nhận trên giao diện; việc xóa giữ hồ sơ/lịch sử trong Quản lý data.
+
+Cấu hình xuất Google Sheets: xem [GOOGLE-SHEETS.md](GOOGLE-SHEETS.md).

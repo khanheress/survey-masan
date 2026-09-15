@@ -1,3 +1,5 @@
+import * as responseReview from '../src/lib/responseReview.mjs';
+import * as participantEditing from '../src/lib/participantEditing.mjs';
 import ExcelJS from 'exceljs';
 import * as projectExport from '../src/lib/projectExport.mjs';
 import * as projectRules from '../src/lib/projectRules.mjs';
@@ -32,17 +34,19 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     ]));
     await migrateResponseProfile(db);
     await initializeParticipantStore(db);
-    const context = vm.createContext({ URL, console, Buffer, Response });
+    const context = vm.createContext({ URL, console, Buffer, Response, process:{env:{}} });
     let signedIn = true;
     let role = 'admin';
     const imports = {
       'next/server': { NextResponse },
-      'next-auth/next': { getServerSession: async () => signedIn ? { user: { role } } : null },
+      'next-auth/next': { getServerSession: async () => signedIn ? { user: { role,id:'admin-test' } } : null },
       '@/lib/authOptions': { authOptions: {} },
       '@/lib/db': { getDb: () => db },
       '@/lib/surveyFlow.mjs': surveyFlow,
       '@/lib/projectRules.mjs': projectRules,
       '@/lib/projectExport.mjs': projectExport,
+      '@/lib/responseReview.mjs': responseReview,
+      '@/lib/participantEditing.mjs': participantEditing,
       exceljs: {default:ExcelJS},
       '@/lib/surveyAdvanced.mjs': { formatAnswer, validateAdvancedAnswer, pipeText },
       '@/lib/respondent.mjs': { validateRespondent, RESPONDENT_FIELDS, INVITERS },
@@ -137,6 +141,13 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     assert.equal((await deleteRoute.DELETE(deleteRequest, deleteContext)).status, 403);
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n, countBeforeDelete);
     role = 'admin';
+    const reviewRequest=status=>new Request('http://localhost/review',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({review_status:status})});
+    signedIn=false;assert.equal((await deleteRoute.PATCH(reviewRequest('approved'),deleteContext)).status,401);signedIn=true;role='moderator';assert.equal((await deleteRoute.PATCH(reviewRequest('approved'),deleteContext)).status,403);role='admin';
+    assert.equal((await deleteRoute.PATCH(reviewRequest('unknown'),deleteContext)).status,400);
+    assert.equal((await deleteRoute.PATCH(reviewRequest('rejected'),deleteContext)).status,200);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n,countBeforeDelete);
+    const reviewed=await(await route.GET(new Request('http://localhost/api/responses?review_status=rejected'))).json();assert.equal(reviewed.responses.length,1);assert.equal(reviewed.responses[0].review_status,'rejected');
+    assert.equal((await deleteRoute.PATCH(reviewRequest('approved'),deleteContext)).status,200);
     const archiveBefore = await listParticipants(db);
     assert.equal((await deleteRoute.DELETE(deleteRequest, deleteContext)).status, 200);
     assert.equal(await db.prepare('SELECT * FROM responses WHERE id = ?').get(saved.id), undefined);
@@ -200,6 +211,7 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     const fileResponse=await xlsx.POST(request({columns:['respondent_name',why.key]}),projectContext);assert.equal(fileResponse.status,200);
     const book=new ExcelJS.Workbook();await book.xlsx.load(Buffer.from(await fileResponse.arrayBuffer()));const sheet=book.worksheets[0];assert.equal(sheet.columnCount,2);assert.equal(sheet.rowCount,15);assert.equal(sheet.getCell('A1').value,'Tên');assert.equal(sheet.getCell('B2').type,ExcelJS.ValueType.String);assert.equal(sheet.getCell('B2').value,'=1+1');
     assert.equal((await xlsx.POST(request({columns:['bad']}),projectContext)).status,400);
+    const googleData=await(await xlsx.POST(request({format:'google',columns:['respondent_name',why.key]}),projectContext)).json();assert.equal(googleData.values.length,15);assert.deepEqual(googleData.values[0],['Tên',why.label]);assert.equal(googleData.values[1][1],'=1+1');
     signedIn=false;assert.equal((await xlsx.GET(new Request('http://localhost/export'),projectContext)).status,401);assert.equal((await xlsx.POST(request({columns:['respondent_name']}),projectContext)).status,401);signedIn=true;
     await db.prepare("UPDATE responses SET created_at='2026-08-31 16:59:59' WHERE id='extra0'").run();
     await db.prepare("UPDATE responses SET created_at='2026-09-15 01:00:00' WHERE id NOT LIKE 'extra%'").run();
@@ -207,5 +219,14 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     assert.ok(september.stats);assert.equal(september.monthly_inviters.find(i=>i.inviter==='Khánh').count,12); // 11 boundary fixtures + one real response in September 2026.
     const august=await(await stats.GET(new Request('http://localhost/api/stats?month=2026-08'))).json();assert.equal(august.monthly_inviters.find(i=>i.inviter==='Khánh').count,1);
     assert.equal((await stats.GET(new Request('http://localhost/api/stats?month=2026-99'))).status,400);
+    const editRoute=await loadRoute('../src/app/api/participants/[id]/route.js');const editContext={params:Promise.resolve({id:'phone:0933333333'})};const editRequest=body=>new Request('http://localhost/edit',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    signedIn=false;assert.equal((await editRoute.PATCH(editRequest({respondent_name:'Tên mới'}),editContext)).status,401);signedIn=true;role='moderator';assert.equal((await editRoute.PATCH(editRequest({respondent_name:'Tên mới'}),editContext)).status,403);role='admin';
+    assert.equal((await editRoute.PATCH(editRequest({respondent_gender:'invalid'}),editContext)).status,400);
+    assert.equal((await editRoute.PATCH(editRequest({respondent_name:'Tên đã sửa',respondent_phone:'0998887777'}),editContext)).status,200);
+    const renamed=await db.prepare("SELECT * FROM participants WHERE id='phone:0998887777'").get();assert.equal(JSON.parse(renamed.profile_json).respondent_name,'Tên đã sửa');assert.ok((await db.prepare("SELECT COUNT(*) AS n FROM participant_history WHERE participant_id='phone:0998887777'").get()).n>0);
+    assert.equal((await db.prepare("SELECT respondent_name FROM responses WHERE respondent_phone='0933333333'").get()).respondent_name,payload.respondent_name);
+    await recordParticipant(db,{id:'later',project_id:'p',survey_id:'s',respondent_phone:'0998887777',respondent_name:'Tên nhập lại',created_at:'2030-01-01 00:00:00'});
+    assert.equal(JSON.parse((await db.prepare("SELECT profile_json FROM participants WHERE id='phone:0998887777'").get()).profile_json).respondent_name,'Tên đã sửa');
+    assert.equal((await editRoute.PATCH(editRequest({respondent_phone:'0998887777'}),{params:Promise.resolve({id:'phone:0944444444'})})).status,409);
   } finally {await db.close();}
 });

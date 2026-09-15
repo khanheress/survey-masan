@@ -3,7 +3,7 @@ import {parseProjectRules} from '@/lib/projectRules.mjs';
 export default function ProjectRulesEditor({value,onChange}){
  const rules=parseProjectRules(value),set=(key,patch)=>onChange({...rules,[key]:{...rules[key],...patch}});
  const quota=v=>v===''?null:Number(v);
- return <div className="project-rules-editor"><h3>Điều kiện và chỉ tiêu dự án</h3><p className="survey-flow-note">Các điều kiện đang bật được xét đồng thời. Để trống chỉ tiêu nếu không giới hạn; nhập 0 để không nhận nhóm đó.</p>
+ return <div className="project-rules-editor"><h3>Kiểm soát dữ liệu đầu vào</h3><p>Thiết lập chỉ tiêu giới tính, nhóm tuổi và BUMO riêng cho dự án này.</p><p className="survey-flow-note">Các điều kiện đang bật được xét đồng thời. Để trống chỉ tiêu nếu không giới hạn; nhập 0 để không nhận nhóm đó.</p>
   <label className="question-required"><input type="checkbox" checked={rules.gender.enabled} onChange={e=>set('gender',{enabled:e.target.checked})}/> Xét theo giới tính</label>
   {rules.gender.enabled&&<div className="editor-grid">{['Nam','Nữ'].map(g=><label className="form-label" key={g}>Chỉ tiêu {g}<input aria-label={`Chỉ tiêu ${g}`} className="form-input" type="number" min={0} value={rules.gender.quotas[g]??''} onChange={e=>set('gender',{quotas:{...rules.gender.quotas,[g]:quota(e.target.value)}})} placeholder="Không giới hạn"/></label>)}</div>}
   <label className="question-required"><input type="checkbox" checked={rules.age.enabled} onChange={e=>set('age',{enabled:e.target.checked})}/> Xét theo nhóm tuổi</label>

@@ -18,6 +18,7 @@ export async function GET(request) {
     const survey_id = searchParams.get('survey_id');
     const project_id = searchParams.get('project_id');
     const phone = searchParams.get('phone');
+    const reviewStatus=searchParams.get('review_status');
     const inviter=searchParams.get('inviter');
     const sort=searchParams.get('sort');
     const page = parseInt(searchParams.get('page')) || 1;
@@ -37,6 +38,7 @@ export async function GET(request) {
     if (survey_id) {query += ' AND r.survey_id = ?';params.push(survey_id);}
     if (project_id) {query += ' AND r.project_id = ?';params.push(project_id);}
     if (phone) {query += ' AND r.respondent_phone LIKE ?';params.push(`%${phone}%`);}
+    if(reviewStatus){query+=' AND r.review_status = ?';params.push(reviewStatus);}
     if(inviter){query+=' AND r.respondent_inviter = ?';params.push(inviter);}
 
     const countQuery = `SELECT COUNT(*) as total FROM (${query})`;

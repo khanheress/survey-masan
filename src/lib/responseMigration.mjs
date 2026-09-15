@@ -1,5 +1,8 @@
 export async function migrateResponseProfile(db) {
   const additions = {
+    review_status: "TEXT NOT NULL DEFAULT 'pending'",
+    reviewed_at: 'TEXT',
+    reviewed_by: 'TEXT',
     respondent_gender: 'TEXT',
     respondent_age: 'INTEGER',
     respondent_bumo: "TEXT DEFAULT '[]'",

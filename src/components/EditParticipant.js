@@ -1,0 +1,9 @@
+'use client';
+import {useState} from 'react';
+import Modal from '@/components/Modal';
+import {RESPONDENT_FIELDS} from '@/lib/respondent.mjs';
+export default function EditParticipant({person,onClose,onSaved}){
+ const [values,setValues]=useState(()=>Object.fromEntries(RESPONDENT_FIELDS.map(f=>[f.key,person[f.key]??'']))),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ async function save(e){e.preventDefault();setBusy(true);setError('');try{const res=await fetch(`/api/participants/${encodeURIComponent(person.id)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(values)});const data=await res.json();if(!res.ok)throw Error(data.error);onSaved();}catch(e){setError(e.message);}finally{setBusy(false);}}
+ return <Modal isOpen onClose={()=>{if(!busy)onClose();}} title="Chỉnh sửa hồ sơ" size="lg"><form onSubmit={save}><p>Thông tin chỉnh sửa được lưu trong Quản lý data. Phản hồi khảo sát đã gửi vẫn giữ thông tin tại thời điểm tham gia.</p><div className="respondent-grid">{RESPONDENT_FIELDS.map(f=><label className="form-label" key={f.key}>{f.label}{f.options?<select aria-label={f.label} className="form-select" value={values[f.key]} disabled={busy} onChange={e=>setValues({...values,[f.key]:e.target.value})}><option value="">Chưa cung cấp</option>{f.options.map(v=><option key={v}>{v}</option>)}</select>:<input aria-label={f.label} className="form-input" type={f.type} maxLength={f.maxLength} value={values[f.key]} disabled={busy} onChange={e=>setValues({...values,[f.key]:e.target.value})}/>}</label>)}</div>{error&&<p role="alert" style={{color:'var(--danger)'}}>{error}</p>}<div className="flex gap-2" style={{marginTop:20}}><button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>Hủy</button><button className="btn btn-primary" disabled={busy}>{busy?'Đang lưu…':'Lưu hồ sơ'}</button></div></form></Modal>;
+}

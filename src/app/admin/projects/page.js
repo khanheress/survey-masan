@@ -148,6 +148,7 @@ export default function ProjectsPage() {
         <label className="form-label">Tên dự án *</label>
         <input type="text" name="name" className="form-input" value={formData.name} onChange={handleInputChange} required />
       </div>
+      <ProjectRulesEditor value={formData.rules_json} onChange={rules_json=>setFormData({...formData,rules_json})}/>
       <div className="form-group">
         <label className="form-label">Mô tả</label>
         <textarea name="description" className="form-textarea" value={formData.description} onChange={handleInputChange}></textarea>
@@ -175,7 +176,7 @@ export default function ProjectsPage() {
           </select>
         </div>
       </div>
-      <ProjectRulesEditor value={formData.rules_json} onChange={rules_json=>setFormData({...formData,rules_json})}/>
+
     </>
   );
 
@@ -215,8 +216,8 @@ export default function ProjectsPage() {
                   </span>
                   {isAdmin && (
                     <div style={{ display: 'flex', gap: '0.5rem' }} onClick={e => e.stopPropagation()}>
-                      <button className="btn-icon btn-ghost" aria-label="Chỉnh sửa dự án" onClick={() => openEditModal(project)}><Icon name="edit" /></button>
-                      <button className="btn-icon btn-ghost" style={{ color: 'var(--danger)' }} aria-label="Xóa dự án" onClick={() => openDeleteModal(project)}><Icon name="trash" /></button>
+                      <button className="btn btn-secondary btn-sm" aria-label="Chỉnh sửa dự án" onClick={() => openEditModal(project)}><Icon name="edit" /> Chỉnh sửa</button>
+                      <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} aria-label="Xóa dự án" onClick={() => openDeleteModal(project)}><Icon name="trash" /> Xóa dự án</button>
                     </div>
                   )}
                 </div>
@@ -256,6 +257,7 @@ export default function ProjectsPage() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         title="Tạo Dự án Mới"
+        size="lg"
       >
         <form id="createProjectForm" onSubmit={handleCreate}>
           {formContent}
@@ -272,6 +274,7 @@ export default function ProjectsPage() {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         title="Chỉnh sửa Dự án"
+        size="lg"
       >
         <form id="editProjectForm" onSubmit={handleEdit}>
           {formContent}
@@ -292,7 +295,7 @@ export default function ProjectsPage() {
       >
         <div style={{ padding: '1rem 0' }}>
           Bạn có chắc chắn muốn xóa dự án <strong>{currentProject?.name}</strong>?
-          Thao tác này sẽ xóa toàn bộ khảo sát và phản hồi liên quan và không thể hoàn tác.
+          Thao tác này sẽ xóa toàn bộ khảo sát và phản hồi liên quan và không thể hoàn tác. Hồ sơ và lịch sử trong Quản lý data vẫn được lưu.
         </div>
         <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
           <button type="button" className="btn btn-ghost" onClick={() => setIsDeleteModalOpen(false)}>Hủy</button>

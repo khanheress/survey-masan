@@ -1,3 +1,4 @@
+import {REVIEW_LABELS} from '@/lib/responseReview.mjs';
 import { formatAnswer } from '@/lib/surveyAdvanced.mjs';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
@@ -14,6 +15,7 @@ export async function GET(request) {
     const project_id = searchParams.get('project_id');
 
     const phone = searchParams.get('phone');
+    const reviewStatus=searchParams.get('review_status');
     const inviter=searchParams.get('inviter'),sort=searchParams.get('sort');
 
     const db = await getDb();
@@ -30,6 +32,7 @@ export async function GET(request) {
     if (project_id) {query += ' AND r.project_id = ?';params.push(project_id);}
 
     if (phone) {query += ' AND r.respondent_phone LIKE ?';params.push(`%${phone}%`);}
+    if(reviewStatus){query+=' AND r.review_status = ?';params.push(reviewStatus);}
 
     if(inviter){query+=' AND r.respondent_inviter = ?';params.push(inviter);}
     query+=sort==='inviter_asc'?" ORDER BY COALESCE(r.respondent_inviter, '') ASC, r.created_at DESC":sort==='inviter_desc'?" ORDER BY COALESCE(r.respondent_inviter, '') DESC, r.created_at DESC":' ORDER BY r.created_at DESC';
@@ -40,6 +43,7 @@ export async function GET(request) {
       try {data = JSON.parse(r.data_json);} catch (e) {}
       return {
         'Response ID': r.id,
+        'Trạng thái tham gia': REVIEW_LABELS[r.review_status||'pending'],
         'Project Name': r.project_name,
         'Survey Title': r.survey_title,
         'Phone': r.respondent_phone,

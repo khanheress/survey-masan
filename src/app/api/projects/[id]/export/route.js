@@ -14,7 +14,7 @@ async function load(context){
 }
 export async function GET(request,context){
  if(!await getServerSession(authOptions))return NextResponse.json({error:'Unauthorized'},{status:401});
- try{const data=await load(context);if(!data)return NextResponse.json({error:'Không tìm thấy dự án'},{status:404});return NextResponse.json({columns:data.columns,total:data.rows.length},{headers:{'Cache-Control':'private, no-store'}});}catch{return NextResponse.json({error:'Không thể tải danh sách mục xuất.'},{status:500});}
+ try{const data=await load(context);if(!data)return NextResponse.json({error:'Không tìm thấy dự án'},{status:404});return NextResponse.json({columns:data.columns,total:data.rows.length,google_client_id:process.env.GOOGLE_CLIENT_ID||''},{headers:{'Cache-Control':'private, no-store'}});}catch{return NextResponse.json({error:'Không thể tải danh sách mục xuất.'},{status:500});}
 }
 export async function POST(request,context){
  if(!await getServerSession(authOptions))return NextResponse.json({error:'Unauthorized'},{status:401});
@@ -22,6 +22,7 @@ export async function POST(request,context){
  const body=await request.json();const data=await load(context);if(!data)return NextResponse.json({error:'Không tìm thấy dự án'},{status:404});
  if(!Array.isArray(body.columns)||!body.columns.length||body.columns.length>16384||new Set(body.columns).size!==body.columns.length)return NextResponse.json({error:'Hãy chọn các mục cần xuất.'},{status:400});
  const columns=body.columns.map(key=>data.columns.find(c=>c.key===key));if(columns.some(c=>!c))return NextResponse.json({error:'Danh sách mục đã thay đổi. Vui lòng mở lại cửa sổ xuất.'},{status:400});
+ if(body.format==='google')return NextResponse.json({title:`${data.project.name} - Phản hồi`,values:[columns.map(c=>c.label),...data.rows.map(row=>columns.map(c=>exportValue(row,c)))]},{headers:{'Cache-Control':'private, no-store'}});
  const workbook=new ExcelJS.Workbook();workbook.creator='SurveyPro';
  const sheet=workbook.addWorksheet('Phản hồi',{views:[{state:'frozen',ySplit:1}]});
  sheet.columns=columns.map(c=>({header:c.label,key:c.key,width:c.questionId?45:25}));

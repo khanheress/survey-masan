@@ -13,6 +13,8 @@ export async function recordParticipant(db, response) {
   const profile = Object.fromEntries(RESPONDENT_FIELDS.map(({ key }) => [key, response[key] ?? null]));
   profile.respondent_phone = phone || null;
   profile.respondent_email = response.respondent_email || null;
+  const existing=await db.prepare('SELECT profile_overrides_json FROM participants WHERE id = ?').get(participantId);
+  if(existing)Object.assign(profile,JSON.parse(existing.profile_overrides_json||'{}'));
   const submittedAt = response.created_at || new Date().toISOString();
   await db.prepare(`INSERT INTO participants (id, phone, name, profile_json, first_seen, last_seen)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -42,6 +44,8 @@ export async function initializeParticipantStore(db) {
   CREATE INDEX IF NOT EXISTS participant_history_project ON participant_history(project_id);
   CREATE INDEX IF NOT EXISTS participants_last_seen ON participants(last_seen);`);
   await db.transaction(async () => {
+  const columns=new Set((await db.prepare('PRAGMA table_info(participants)').all()).map(c=>c.name));
+  if(!columns.has('profile_overrides_json'))await db.exec("ALTER TABLE participants ADD COLUMN profile_overrides_json TEXT NOT NULL DEFAULT '{}'");
     const oldResponses = await db.prepare(`SELECT r.*, p.name AS project_name, s.title AS survey_title
       FROM responses r LEFT JOIN projects p ON p.id = r.project_id LEFT JOIN surveys s ON s.id = r.survey_id
       WHERE NOT EXISTS (SELECT 1 FROM participant_history h WHERE h.response_id = r.id)

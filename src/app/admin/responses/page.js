@@ -1,6 +1,8 @@
 'use client';
 
 import Icon from '@/components/Icon';
+import ResponseReview from '@/components/ResponseReview';
+import {REVIEW_LABELS} from '@/lib/responseReview.mjs';
 import {INVITERS} from '@/lib/respondent.mjs';
 import SurveyAnswerValue from '@/components/SurveyAnswerValue';
 import { useSession } from 'next-auth/react';
@@ -30,6 +32,7 @@ export default function ResponsesPage() {
   const [phoneSearch, setPhoneSearch] = useState('');
   const [inviter,setInviter]=useState('');
   const [sort,setSort]=useState('newest');
+  const [reviewStatus,setReviewStatus]=useState('');
   
   // Modals
   const [selectedResponse, setSelectedResponse] = useState(null);
@@ -69,11 +72,12 @@ export default function ResponsesPage() {
     if (phoneSearch) params.append('phone', phoneSearch);
     if(inviter)params.set('inviter',inviter);
     params.set('sort',sort);
+    if(reviewStatus)params.set('review_status',reviewStatus);
     const res = await fetch(`/api/responses?${params.toString()}`, { signal });
     if (!res.ok) throw new Error('Failed to load responses');
     const data = await res.json();
     return { responses: data.responses || [], pagination: data.pagination || emptyResponses.pagination };
-  }, [selectedProject, selectedSurvey, phoneSearch, page, inviter, sort]);
+  }, [selectedProject, selectedSurvey, phoneSearch, page, inviter, sort, reviewStatus]);
   const { data, loading, error, refresh } = useRemoteData(
     loadResponses, emptyResponses, 'Lỗi khi tải dữ liệu'
   );
@@ -106,6 +110,7 @@ export default function ResponsesPage() {
     if (phoneSearch) params.set('phone', phoneSearch);
     if(inviter)params.set('inviter',inviter);
     params.set('sort',sort);
+    if(reviewStatus)params.set('review_status',reviewStatus);
     try {
       await downloadCsv(`/api/responses/export?${params.toString()}`);
     } catch (error) {
@@ -116,7 +121,7 @@ export default function ResponsesPage() {
   const clearFilters = () => {
     setSelectedProject('');
     setSelectedSurvey('');
-    setPhoneSearch('');setInviter('');setSort('newest');
+    setPhoneSearch('');setInviter('');setSort('newest');setReviewStatus('');
     setPage(1);
   };
 
@@ -157,6 +162,7 @@ export default function ResponsesPage() {
         <label className="form-label">Người mời<select aria-label="Người mời" className="form-select" value={inviter} onChange={e=>{setInviter(e.target.value);setPage(1);}}><option value="">Tất cả người mời</option>{INVITERS.map(v=><option key={v}>{v}</option>)}</select></label>
         <label className="form-label">Sắp xếp<select aria-label="Sắp xếp" className="form-select" value={sort} onChange={e=>{setSort(e.target.value);setPage(1);}}><option value="newest">Mới nhất</option><option value="inviter_asc">Người mời A → Z</option><option value="inviter_desc">Người mời Z → A</option></select></label>
       </div>
+      <label className="form-label" style={{maxWidth:300,marginBottom:20}}>Trạng thái tham gia<select aria-label="Lọc trạng thái tham gia" className="form-select" value={reviewStatus} onChange={e=>{setReviewStatus(e.target.value);setPage(1);}}><option value="">Tất cả trạng thái</option>{Object.entries(REVIEW_LABELS).map(([key,label])=><option value={key} key={key}>{label}</option>)}</select></label>
       <div className="response-layout">
         <div>
           {loading ? (
@@ -194,7 +200,8 @@ export default function ResponsesPage() {
                         <td>{response.surveyName}</td>
                         <td style={{ color: 'var(--text-secondary)' }}>{new Date(response.created_at).toLocaleString('vi-VN')}</td>
                         <td><div className="flex gap-2">
-                          <button className="btn btn-secondary btn-sm" aria-label={`Xem phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setSelectedResponse(response); }}>Xem</button>
+                          <ResponseReview response={response} onSaved={()=>refresh()}/>
+                        <button className="btn btn-secondary btn-sm" aria-label={`Xem phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setSelectedResponse(response); }}>Xem</button>
                           {canDelete && <button className="btn btn-danger btn-sm" aria-label={`Xóa phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setPendingDelete(response); }}><Icon name="trash" /> Xóa</button>}
                         </div></td>
                       </tr>
@@ -218,7 +225,7 @@ export default function ResponsesPage() {
       <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md" footer={canDelete && <button className="btn btn-danger" onClick={() => { setPendingDelete(selectedResponse); setSelectedResponse(null); }}><Icon name="trash" /> Xóa phản hồi này</button>}>
         {selectedResponse && (
           <div>
-            <RespondentDetails response={selectedResponse} />
+            <RespondentDetails response={selectedResponse} /><ResponseReview response={selectedResponse} onSaved={review_status=>{setSelectedResponse({...selectedResponse,review_status});refresh();}}/>
 
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-color)' }}>
               Nội dung trả lời
