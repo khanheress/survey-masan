@@ -30,9 +30,10 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     await initializeParticipantStore(db);
     const context = vm.createContext({ URL, console });
     let signedIn = true;
+    let role = 'admin';
     const imports = {
       'next/server': { NextResponse },
-      'next-auth/next': { getServerSession: async () => signedIn ? { user: { role: 'admin' } } : null },
+      'next-auth/next': { getServerSession: async () => signedIn ? { user: { role } } : null },
       '@/lib/authOptions': { authOptions: {} },
       '@/lib/db': { getDb: () => db },
       '@/lib/surveyFlow.mjs': surveyFlow,
@@ -118,5 +119,27 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     assert.deepEqual(JSON.parse((await db.prepare('SELECT fields_json FROM surveys').get()).fields_json),definition);
     const validSave=await adminRoute.PUT(new Request('http://localhost/api/surveys/s',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields_json:definition})}),{params:Promise.resolve({id:'s'})});
     assert.equal(validSave.status,200);
+    const deleteRoute = await loadRoute('../src/app/api/responses/[id]/route.js');
+    const deleteRequest = new Request('http://localhost/api/responses/' + saved.id, { method: 'DELETE' });
+    const deleteContext = { params: Promise.resolve({ id: saved.id }) };
+    const countBeforeDelete = (await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n;
+    signedIn = false;
+    assert.equal((await deleteRoute.DELETE(deleteRequest, deleteContext)).status, 401);
+    signedIn = true; role = 'moderator';
+    assert.equal((await deleteRoute.DELETE(deleteRequest, deleteContext)).status, 403);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n, countBeforeDelete);
+    role = 'admin';
+    const archiveBefore = await listParticipants(db);
+    assert.equal((await deleteRoute.DELETE(deleteRequest, deleteContext)).status, 200);
+    assert.equal(await db.prepare('SELECT * FROM responses WHERE id = ?').get(saved.id), undefined);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n, countBeforeDelete - 1);
+    assert.deepEqual(await listParticipants(db), archiveBefore);
+    assert.equal((await deleteRoute.DELETE(deleteRequest, deleteContext)).status, 404);
+    assert.equal((await deleteRoute.DELETE(deleteRequest, { params: Promise.resolve({id: "' OR 1=1 --"}) })).status, 404);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n, countBeforeDelete - 1);
+    const afterDelete = await (await route.GET(new Request('http://localhost/api/responses'))).json();
+    assert.equal(afterDelete.responses.some(item => item.id === saved.id), false);
+    // Deletion frees the previous phone only in this survey, allowing a fresh valid submission.
+    assert.equal((await route.POST(request({...payload,answers_json:{gate:'Có',shown:'new submission'}}))).status, 201);
   } finally {await db.close();}
 });

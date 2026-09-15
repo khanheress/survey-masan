@@ -1,6 +1,7 @@
 'use client';
 
 import Icon from '@/components/Icon';
+import { useSession } from 'next-auth/react';
 import RespondentDetails from '@/components/RespondentDetails';
 import { downloadCsv } from '@/lib/downloadCsv';
 import useRemoteData from '@/hooks/useRemoteData';
@@ -9,8 +10,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 
+const emptyResponses = { responses: [], pagination: { total: 0, page: 1, totalPages: 1 } };
+
 export default function ResponsesPage() {
   const { addToast } = useToast();
+  const { data: session } = useSession();
+  const canDelete = session?.user?.role === 'admin';
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [page, setPage] = useState(1);
   const [projects, setProjects] = useState([]);
   const [surveys, setSurveys] = useState([]);
   
@@ -51,18 +59,39 @@ export default function ResponsesPage() {
   }, [selectedProject]);
 
   const loadResponses = useCallback(async (signal) => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ page: String(page) });
     if (selectedProject) params.append('project_id', selectedProject);
     if (selectedSurvey) params.append('survey_id', selectedSurvey);
     if (phoneSearch) params.append('phone', phoneSearch);
     const res = await fetch(`/api/responses?${params.toString()}`, { signal });
     if (!res.ok) throw new Error('Failed to load responses');
     const data = await res.json();
-    return data.responses || [];
-  }, [selectedProject, selectedSurvey, phoneSearch]);
-  const { data: responses, loading } = useRemoteData(
-    loadResponses, [], 'Lỗi khi tải dữ liệu'
+    return { responses: data.responses || [], pagination: data.pagination || emptyResponses.pagination };
+  }, [selectedProject, selectedSurvey, phoneSearch, page]);
+  const { data, loading, error, refresh } = useRemoteData(
+    loadResponses, emptyResponses, 'Lỗi khi tải dữ liệu'
   );
+  const { responses, pagination } = data;
+  const totalPages = Math.max(1, pagination.totalPages);
+
+  const deleteResponse = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/responses/${encodeURIComponent(pendingDelete.id)}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (!res.ok && res.status !== 404) throw new Error(result.error || 'Không thể xóa phản hồi.');
+      if (selectedResponse?.id === pendingDelete.id) setSelectedResponse(null);
+      setPendingDelete(null);
+      if (responses.length === 1 && page > 1) setPage(page - 1);
+      else refresh();
+      addToast(res.status === 404 ? 'Phản hồi đã được xóa trước đó.' : 'Đã xóa phản hồi.', 'success');
+    } catch (error) {
+      addToast(error.message, 'error');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const exportCSV = async () => {
     const params = new URLSearchParams();
@@ -80,6 +109,7 @@ export default function ResponsesPage() {
     setSelectedProject('');
     setSelectedSurvey('');
     setPhoneSearch('');
+    setPage(1);
   };
 
   return (
@@ -92,21 +122,21 @@ export default function ResponsesPage() {
         <div className="response-filters" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', alignItems: 'end' }}>
           <div>
             <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Lọc theo Dự án</label>
-            <select className="form-select" value={selectedProject} onChange={e => { setSelectedProject(e.target.value); setSelectedSurvey(''); }}>
+            <select className="form-select" value={selectedProject} onChange={e => { setSelectedProject(e.target.value); setSelectedSurvey(''); setPage(1); }}>
               <option value="">Tất cả Dự án</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div>
             <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Lọc theo Khảo sát</label>
-            <select className="form-select" value={selectedSurvey} onChange={e => setSelectedSurvey(e.target.value)} disabled={!selectedProject}>
+            <select className="form-select" value={selectedSurvey} onChange={e => { setSelectedSurvey(e.target.value); setPage(1); }} disabled={!selectedProject}>
               <option value="">Tất cả Khảo sát</option>
               {surveys.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
             </select>
           </div>
           <div>
             <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Tìm Số điện thoại</label>
-            <input type="text" className="form-input" placeholder="Nhập SĐT..." value={phoneSearch} onChange={e => setPhoneSearch(e.target.value)} />
+            <input type="text" className="form-input" placeholder="Nhập SĐT..." value={phoneSearch} onChange={e => { setPhoneSearch(e.target.value); setPage(1); }} />
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button className="btn btn-secondary" onClick={clearFilters} title="Xóa bộ lọc"><Icon name="refresh" /></button>
@@ -119,6 +149,8 @@ export default function ResponsesPage() {
         <div>
           {loading ? (
             <div className="card skeleton" style={{ height: '400px' }}></div>
+          ) : error ? (
+            <div className="card empty-state"><p>Không thể tải phản hồi.</p><button className="btn btn-secondary" onClick={refresh}>Thử lại</button></div>
           ) : responses.length === 0 ? (
             <div className="glass-card empty-state">
               <div style={{ fontSize: '3rem', marginBottom: '1rem' }}><Icon name="file" /></div>
@@ -137,6 +169,7 @@ export default function ResponsesPage() {
                       <th>Dự án</th>
                       <th>Khảo sát</th>
                       <th>Ngày nộp</th>
+                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -148,10 +181,21 @@ export default function ResponsesPage() {
                         <td>{response.projectName}</td>
                         <td>{response.surveyName}</td>
                         <td style={{ color: 'var(--text-secondary)' }}>{new Date(response.created_at).toLocaleString('vi-VN')}</td>
+                        <td><div className="flex gap-2">
+                          <button className="btn btn-secondary btn-sm" aria-label={`Xem phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setSelectedResponse(response); }}>Xem</button>
+                          {canDelete && <button className="btn btn-danger btn-sm" aria-label={`Xóa phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setPendingDelete(response); }}><Icon name="trash" /> Xóa</button>}
+                        </div></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="data-pagination">
+                <span>{pagination.total} phản hồi · Trang {page} / {totalPages}</span>
+                <div className="flex gap-2">
+                  <button className="btn btn-secondary btn-sm" disabled={page <= 1} onClick={() => setPage(previous => previous - 1)}>Trước</button>
+                  <button className="btn btn-secondary btn-sm" disabled={page >= totalPages} onClick={() => setPage(previous => previous + 1)}>Sau</button>
+                </div>
               </div>
             </div>
           )}
@@ -159,7 +203,7 @@ export default function ResponsesPage() {
 
       </div>
 
-      <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md">
+      <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md" footer={canDelete && <button className="btn btn-danger" onClick={() => { setPendingDelete(selectedResponse); setSelectedResponse(null); }}><Icon name="trash" /> Xóa phản hồi này</button>}>
         {selectedResponse && (
           <div>
             <RespondentDetails response={selectedResponse} />
@@ -183,6 +227,15 @@ export default function ResponsesPage() {
             </div>
           </div>
         )}
+      </Modal>
+      <Modal isOpen={!!pendingDelete} onClose={() => { if (!deleting) setPendingDelete(null); }} title="Xóa phản hồi?" size="sm" footer={<>
+        <button className="btn btn-secondary" disabled={deleting} onClick={() => setPendingDelete(null)}>Hủy</button>
+        <button className="btn btn-danger" disabled={deleting} onClick={deleteResponse}>{deleting ? 'Đang xóa…' : 'Xác nhận xóa'}</button>
+      </>}>
+        {pendingDelete && <>
+          <p>Phản hồi của <strong>{pendingDelete.respondent_name || 'người tham gia'}</strong> ({pendingDelete.respondent_phone || 'không có số điện thoại'}) trong khảo sát <strong>{pendingDelete.surveyName || pendingDelete.survey_title}</strong> sẽ bị xóa vĩnh viễn.</p>
+          <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>Hồ sơ và lịch sử đã lưu trong Quản lý data vẫn được giữ lại. Số điện thoại này có thể gửi lại khảo sát nếu khảo sát còn mở.</p>
+        </>}
       </Modal>
     </div>
   );
