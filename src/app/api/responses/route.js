@@ -1,3 +1,4 @@
+import { parseSurveyFields, validateSurveyAnswers } from '@/lib/surveyFlow.mjs';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
@@ -85,6 +86,11 @@ export async function POST(request) {
       return NextResponse.json({ error: availability.message, reason: availability.reason }, { status: 403 });
     }
 
+    let definition;
+    try { definition = parseSurveyFields(survey.fields_json); } catch { return NextResponse.json({ error: 'Cấu hình khảo sát không hợp lệ' }, { status: 400 }); }
+    const checked = validateSurveyAnswers(definition, data);
+    if (checked.error) return NextResponse.json({ error: checked.error, reason: checked.status === 'screenout' ? 'screenout' : 'invalid_answers' }, { status: checked.status === 'screenout' ? 422 : 400 });
+
     // 5. Check phone not already used for this survey
     if (respondent_phone) {
       const existing = await db.prepare('SELECT * FROM responses WHERE survey_id = ? AND respondent_phone = ?').get(survey_id, respondent_phone);
@@ -96,7 +102,7 @@ export async function POST(request) {
     const id = uuidv4();
     const insert = db.prepare('INSERT INTO responses (id, survey_id, project_id, respondent_phone, respondent_name, respondent_email, respondent_birth_year, respondent_address, respondent_occupation, respondent_marital_status, respondent_inviter, data_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     await db.transaction(async () => {
-      await insert.run(id, survey_id, project.id, respondent_phone || null, respondent_name || null, respondent_email || null, respondent_birth_year, respondent_address, respondent_occupation, respondent_marital_status, respondent_inviter, JSON.stringify(data));
+      await insert.run(id, survey_id, project.id, respondent_phone || null, respondent_name || null, respondent_email || null, respondent_birth_year, respondent_address, respondent_occupation, respondent_marital_status, respondent_inviter, JSON.stringify(checked.answers));
       const saved = await db.prepare('SELECT * FROM responses WHERE id = ?').get(id);
       await recordParticipant(db, { ...saved, project_name: project.name, survey_title: survey.title });
     })();

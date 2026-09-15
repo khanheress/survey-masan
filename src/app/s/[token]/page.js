@@ -5,11 +5,12 @@ import RespondentFields from '@/components/RespondentFields';
 import { validateRespondent } from '@/lib/respondent.mjs';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import SurveyQuestions from '@/components/SurveyQuestions';
+import { evaluateSurvey, changeSurveyAnswer, validateSurveyAnswers } from '@/lib/surveyFlow.mjs';
 
 export default function PublicSurveyPage({ params }) {
   const { token } = React.use(params);
-  const router = useRouter();
+
   
   const [survey, setSurvey] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -21,6 +22,8 @@ export default function PublicSurveyPage({ params }) {
   // Form state
   const [respondentInfo, setRespondentInfo] = useState({});
   const [answers, setAnswers] = useState({});
+  const [endMessage, setEndMessage] = useState('');
+  const flow = evaluateSurvey(survey?.fields_json || [], answers);
 
   useEffect(() => {
     const fetchSurvey = async () => {
@@ -62,18 +65,14 @@ export default function PublicSurveyPage({ params }) {
     fetchSurvey();
   }, [token]);
 
-  const handleAnswerChange = (fieldId, value, isCheckbox = false) => {
-    setAnswers(prev => {
-      if (isCheckbox) {
-        const current = prev[fieldId] || [];
-        if (current.includes(value)) {
-          return { ...prev, [fieldId]: current.filter(v => v !== value) };
-        } else {
-          return { ...prev, [fieldId]: [...current, value] };
-        }
-      }
-      return { ...prev, [fieldId]: value };
-    });
+  const handleAnswerChange = (fieldId, value) => {
+    const next = changeSurveyAnswer(survey.fields_json, answers, fieldId, value);
+    setAnswers(next);
+    const nextFlow = evaluateSurvey(survey.fields_json, next);
+    if (nextFlow.status === 'screenout') {
+      setEndMessage(nextFlow.message);
+      setStatus('screenout');
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -85,19 +84,9 @@ export default function PublicSurveyPage({ params }) {
       return;
     }
 
-    // Validate required fields
-    if (survey.fields_json) {
-      for (const field of survey.fields_json) {
-        if (field.required) {
-          const ans = answers[field.id];
-          if (!ans || (Array.isArray(ans) && ans.length === 0)) {
-            alert(`Vui lòng trả lời câu hỏi: ${field.label}`);
-            return;
-          }
-        }
-      }
-    }
-    
+    const checked = validateSurveyAnswers(survey.fields_json || [], answers);
+    if (checked.error) { alert(checked.error); return; }
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/responses', {
@@ -107,7 +96,7 @@ export default function PublicSurveyPage({ params }) {
           survey_id: survey.id,
           project_id: survey.project_id,
           ...profile.values,
-          answers_json: answers
+          answers_json: checked.answers
         })
       });
       
@@ -115,7 +104,8 @@ export default function PublicSurveyPage({ params }) {
         setStatus('submitted');
       } else {
         const errData = await res.json();
-        alert(errData.error || 'Có lỗi xảy ra khi gửi phản hồi');
+        if (errData.reason === 'screenout') { setEndMessage(errData.error); setStatus('screenout'); }
+        else alert(errData.error || 'Có lỗi xảy ra khi gửi phản hồi');
       }
     } catch (err) {
       alert('Lỗi kết nối. Vui lòng thử lại sau.');
@@ -158,6 +148,12 @@ export default function PublicSurveyPage({ params }) {
     );
   }
 
+  if (status === 'screenout') {
+    return <div className="public-form-container"><div className="public-form-card" role="status">
+      <h1>Khảo sát đã kết thúc</h1><p>{endMessage}</p>
+    </div></div>;
+  }
+
   if (status === 'submitted') {
     return (
       <div className="public-form-container">
@@ -192,144 +188,13 @@ export default function PublicSurveyPage({ params }) {
         </div>
 
         <form onSubmit={handleSubmit}>
+          {flow.error && <p role="alert">Cấu hình khảo sát cần được người tạo kiểm tra lại.</p>}
           <RespondentFields values={respondentInfo} onChange={(key, value) => setRespondentInfo(previous => ({ ...previous, [key]: value }))} />
 
-          {/* Dynamic Fields */}
-          {(survey.fields_json || []).map((field, index) => (
-            <div key={field.id} className="card" style={{ marginBottom: '1.5rem', background: 'var(--bg-secondary)' }}>
-              <label className="form-label" style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>
-                {index + 1}. {field.label} {field.required && <span style={{ color: 'var(--danger)' }}>*</span>}
-              </label>
-
-              {['short_text', 'phone', 'email'].includes(field.type) && (
-                <input 
-                  type={field.type === 'phone' ? 'tel' : field.type === 'email' ? 'email' : 'text'} 
-                  className="form-input" 
-                  placeholder={field.placeholder || 'Nhập câu trả lời...'} 
-                  value={answers[field.id] || ''}
-                  onChange={e => handleAnswerChange(field.id, e.target.value)}
-                  required={field.required}
-                />
-              )}
-              
-              {field.type === 'date' && (
-                <input 
-                  type="date"
-                  className="form-input" 
-                  value={answers[field.id] || ''}
-                  onChange={e => handleAnswerChange(field.id, e.target.value)}
-                  required={field.required}
-                />
-              )}
-
-              {field.type === 'long_text' && (
-                <textarea 
-                  className="form-textarea" 
-                  placeholder={field.placeholder || 'Nhập câu trả lời...'}
-                  value={answers[field.id] || ''}
-                  onChange={e => handleAnswerChange(field.id, e.target.value)}
-                  required={field.required}
-                ></textarea>
-              )}
-
-              {field.type === 'multiple_choice' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {field.options.map((opt, i) => (
-                    <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem', borderRadius: 'var(--radius-sm)', transition: 'background 0.2s' }} className="hover:bg-glass">
-                      <input 
-                        type="radio" 
-                        name={`field_${field.id}`}
-                        className="form-radio" 
-                        checked={answers[field.id] === opt}
-                        onChange={() => handleAnswerChange(field.id, opt)}
-                        required={field.required && !answers[field.id]}
-                      />
-                      <span style={{ fontSize: '1rem' }}>{opt}</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              {field.type === 'checkbox' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {field.options.map((opt, i) => (
-                    <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem', borderRadius: 'var(--radius-sm)', transition: 'background 0.2s' }} className="hover:bg-glass">
-                      <input 
-                        type="checkbox" 
-                        className="form-checkbox" 
-                        checked={(answers[field.id] || []).includes(opt)}
-                        onChange={() => handleAnswerChange(field.id, opt, true)}
-                      />
-                      <span style={{ fontSize: '1rem' }}>{opt}</span>
-                    </label>
-                  ))}
-                  {field.required && (answers[field.id] || []).length === 0 && (
-                    <input type="checkbox" style={{ display: 'none' }} required /> // Hidden input just for HTML5 validation if needed, though we do manual
-                  )}
-                </div>
-              )}
-
-              {field.type === 'dropdown' && (
-                <select 
-                  className="form-select" 
-                  value={answers[field.id] || ''}
-                  onChange={e => handleAnswerChange(field.id, e.target.value)}
-                  required={field.required}
-                >
-                  <option value="" disabled>Chọn một tùy chọn</option>
-                  {field.options.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
-                </select>
-              )}
-
-              {field.type === 'rating' && (
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {Array(field.max || 5).fill(0).map((_, i) => (
-                    <button 
-                      key={i}
-                      type="button"
-                      onClick={() => handleAnswerChange(field.id, i + 1)}
-                      style={{ 
-                        background: 'none', border: 'none', fontSize: '2rem', cursor: 'pointer', 
-                        color: answers[field.id] > i ? 'var(--warning)' : 'var(--bg-tertiary)',
-                        transition: 'color 0.2s'
-                      }}
-                    >
-                      ★
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {field.type === 'linear_scale' && (
-                <div style={{ overflowX: 'auto', paddingBottom: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', minWidth: 'max-content' }}>
-                    <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{field.minLabel}</span>
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                      {Array.from({ length: (field.max || 5) - (field.min || 1) + 1 }, (_, i) => (field.min || 1) + i).map(n => (
-                        <div key={n} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{n}</span>
-                          <button 
-                            type="button"
-                            onClick={() => handleAnswerChange(field.id, n)}
-                            style={{ 
-                              width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', transition: 'all 0.2s',
-                              background: answers[field.id] === n ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
-                              border: answers[field.id] === n ? 'none' : '1px solid var(--border-color)',
-                              boxShadow: answers[field.id] === n ? 'var(--shadow-glow)' : 'none'
-                            }}
-                          ></button>
-                        </div>
-                      ))}
-                    </div>
-                    <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{field.maxLabel}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+          <SurveyQuestions flow={flow} answers={answers} onChange={handleAnswerChange} />
 
           <div style={{ marginTop: '3rem', textAlign: 'center' }}>
-            <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%', maxWidth: '300px', borderRadius: '50px', padding: '16px', fontSize: '1.1rem', fontWeight: 600 }} disabled={submitting}>
+            <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%', maxWidth: '300px', borderRadius: '50px', padding: '16px', fontSize: '1.1rem', fontWeight: 600 }} disabled={submitting || flow.status !== 'complete'}>
               {submitting ? <span className="spinner"></span> : 'Gửi Phản Hồi'}
             </button>
           </div>

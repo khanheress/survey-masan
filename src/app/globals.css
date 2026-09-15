@@ -667,3 +667,15 @@ button, input, select, textarea { font-size: 0.875rem; }
 .recall-description { white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 1.5rem; color: var(--text-secondary); }
 .recall-receipt { font-size: 1.5rem; font-weight: 600; margin: 1rem 0; }
 @media (max-width: 480px) { .recall-slot-row { padding: .75rem; gap: .5rem; } }
+
+/* Survey sections and branching controls */
+.builder-section-card { border-top: 4px solid var(--accent-primary); }
+.survey-section-heading { border-top: 2px solid var(--border-color); padding: 1.5rem 0 .5rem; margin-top: 1.5rem; }
+.survey-section-heading h2 { font-size: 1.35rem; margin-bottom: .5rem; }
+.survey-section-heading p { color: var(--text-secondary); white-space: pre-wrap; }
+.survey-logic-editor { margin-top: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; }
+.survey-logic-editor summary { cursor: pointer; font-weight: 600; }
+.survey-flow-note { color: var(--text-secondary); font-size: .875rem; line-height: 1.6; margin: 1rem 0; }
+.survey-rule { border-top: 1px solid var(--border-color); margin-top: 1rem; padding-top: 1rem; }
+.survey-rule select { margin-bottom: .75rem; }
+.survey-questions { margin-top: 1.5rem; }

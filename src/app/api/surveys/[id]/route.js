@@ -1,3 +1,4 @@
+import { parseSurveyFields, validateSurveyFields } from '@/lib/surveyFlow.mjs';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
@@ -44,6 +45,12 @@ export async function PUT(request, context) {
     const existing = await db.prepare('SELECT * FROM surveys WHERE id = ?').get(id);
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+    if (body.fields_json !== undefined || body.is_published) {
+      let definition;
+      try { definition = parseSurveyFields(body.fields_json ?? existing.fields_json); } catch { return NextResponse.json({ error: 'Danh sách câu hỏi không hợp lệ' }, { status: 400 }); }
+      const definitionError = validateSurveyFields(definition);
+      if (definitionError) return NextResponse.json({ error: definitionError }, { status: 400 });
+    }
     const fields = [];
     const values = [];
     const allowedFields = ['title', 'description', 'fields_json', 'is_published'];

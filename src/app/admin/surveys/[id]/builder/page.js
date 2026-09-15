@@ -1,7 +1,9 @@
 'use client';
 
 import Icon from '@/components/Icon';
-import RespondentFields from '@/components/RespondentFields';
+import SurveyFlowPreview from '@/components/SurveyFlowPreview';
+import SurveyLogicEditor from '@/components/SurveyLogicEditor';
+import { validateSurveyFields } from '@/lib/surveyFlow.mjs';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,6 +11,7 @@ import { useToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 
 const FIELD_TYPES = [
+  { id: 'section', label: 'Chia phần', icon: <Icon name="file" /> },
   { id: 'short_text', label: 'Văn bản ngắn', icon: <Icon name="mail" /> },
   { id: 'long_text', label: 'Văn bản dài', icon: <Icon name="file" /> },
   { id: 'multiple_choice', label: 'Trắc nghiệm', icon: <Icon name="radio" /> },
@@ -53,6 +56,8 @@ export default function SurveyBuilderPage({ params }) {
   }, [id, addToast]);
 
   const handleSave = async () => {
+    const configError = validateSurveyFields(fields);
+    if (configError) { addToast(configError, 'error'); return false; }
     setSaving(true);
     try {
       const res = await fetch(`/api/surveys/${id}`, {
@@ -63,8 +68,11 @@ export default function SurveyBuilderPage({ params }) {
       if (res.ok) {
         addToast('Đã lưu thành công', 'success');
         setSurvey(await res.json());
+        return true;
       } else {
-        addToast('Lỗi khi lưu', 'error');
+        const data = await res.json();
+        addToast(data.error || 'Lỗi khi lưu', 'error');
+        return false;
       }
     } catch (error) {
       addToast('Lỗi mạng', 'error');
@@ -74,6 +82,7 @@ export default function SurveyBuilderPage({ params }) {
   };
 
   const handlePublishToggle = async () => {
+    if (!survey.is_published && !(await handleSave())) return;
     try {
       const res = await fetch(`/api/surveys/${id}/publish`, {
         method: 'POST',
@@ -83,6 +92,9 @@ export default function SurveyBuilderPage({ params }) {
       if (res.ok) {
         setSurvey(prev => ({ ...prev, is_published: !prev.is_published }));
         addToast(`Khảo sát đã được ${!survey.is_published ? 'công khai' : 'ẩn'}`, 'success');
+      } else {
+        const data = await res.json();
+        addToast(data.error || 'Không thể công khai khảo sát', 'error');
       }
     } catch (error) {
       addToast('Lỗi', 'error');
@@ -93,7 +105,10 @@ export default function SurveyBuilderPage({ params }) {
     const newField = {
       id: `field_${crypto.randomUUID()}`,
       type,
-      label: 'Câu hỏi chưa có tiêu đề',
+      label: type === 'section' ? 'Phần mới' : 'Câu hỏi chưa có tiêu đề',
+      description: '',
+      after: 'next',
+      rules: [],
       required: false,
       placeholder: '',
       options: ['Tùy chọn 1'],
@@ -107,10 +122,12 @@ export default function SurveyBuilderPage({ params }) {
   };
 
   const updateField = (fieldId, updates) => {
-    setFields(fields.map(f => f.id === fieldId ? { ...f, ...updates } : f));
+    setFields(previous => previous.map(f => f.id === fieldId ? { ...f, ...updates } : f));
   };
 
   const removeField = (fieldId) => {
+    const referenced = fields.some(f => f.after === fieldId || f.rules?.some(r => r.target === fieldId));
+    if (referenced) { addToast('Mục này đang là điểm đến của quy tắc. Hãy đổi điểm đến trước khi xóa.', 'error'); return; }
     setFields(fields.filter(f => f.id !== fieldId));
   };
 
@@ -120,6 +137,8 @@ export default function SurveyBuilderPage({ params }) {
     const temp = newFields[index];
     newFields[index] = newFields[index + direction];
     newFields[index + direction] = temp;
+    const error = validateSurveyFields(newFields);
+    if (error) { addToast(error, 'error'); return; }
     setFields(newFields);
   };
 
@@ -131,10 +150,10 @@ export default function SurveyBuilderPage({ params }) {
       <div className="flex-between builder-toolbar" style={{ marginBottom: '1.5rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button className="btn-icon btn-ghost" onClick={() => router.push(`/admin/projects/${survey.project_id}`)}>←</button>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0 }}>Builder: {survey.title}</h1>
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0 }}>Tạo câu hỏi: {survey.title}</h1>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
-          {survey.is_published && (
+          {Boolean(survey.is_published) && (
             <button className="btn btn-secondary" onClick={() => {
               navigator.clipboard.writeText(`${window.location.origin}/s/${survey.share_token}`);
               addToast('Đã copy link', 'success');
@@ -142,7 +161,7 @@ export default function SurveyBuilderPage({ params }) {
               <Icon name="link" /> Copy Link
             </button>
           )}
-          <button className={`btn ${survey.is_published ? 'btn-danger' : 'btn-secondary'}`} onClick={handlePublishToggle}>
+          <button className={`btn ${survey.is_published ? 'btn-danger' : 'btn-secondary'}`} onClick={handlePublishToggle} disabled={saving}>
             {survey.is_published ? 'Ngừng Công Khai' : 'Công Khai'}
           </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
@@ -170,8 +189,9 @@ export default function SurveyBuilderPage({ params }) {
             />
           </div>
 
+          <p className="survey-flow-note">Thêm “Chia phần” trước nhóm câu hỏi. Với các nhánh riêng, đặt “Sau phần này” để chuyển đến phần chung hoặc hoàn tất, tránh đi tiếp sang nhánh khác.</p>
           {fields.map((field, index) => (
-            <div key={field.id} className="builder-field-card">
+            <div key={field.id} className={`builder-field-card ${field.type === 'section' ? 'builder-section-card' : ''}`}>
               <div style={{ display: 'flex', justifyContent: 'center', padding: '0.25rem', color: 'var(--text-muted)', cursor: 'grab' }}>
                 <Icon name="menu" />
               </div>
@@ -194,13 +214,16 @@ export default function SurveyBuilderPage({ params }) {
                     className="form-input"
                     value={field.label}
                     onChange={e => updateField(field.id, { label: e.target.value })}
-                    placeholder="Câu hỏi"
+                    placeholder={field.type === 'section' ? 'Tên phần' : 'Câu hỏi'}
                     style={{ fontSize: '1.1rem', fontWeight: 500, padding: '1rem' }}
                   />
                 </div>
 
                 <div style={{ background: 'var(--bg-primary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
                   {/* Field Specific Options */}
+                  {field.type === 'section' && <label className="form-label">Mô tả phần
+                    <textarea className="form-textarea" value={field.description || ''} onChange={e => updateField(field.id, { description: e.target.value })} />
+                  </label>}
                   {['short_text', 'long_text', 'date', 'phone', 'email'].includes(field.type) && (
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label">Placeholder (Tùy chọn)</label>
@@ -224,12 +247,12 @@ export default function SurveyBuilderPage({ params }) {
                             onChange={e => {
                               const newOpts = [...field.options];
                               newOpts[oIdx] = e.target.value;
-                              updateField(field.id, { options: newOpts });
+                              updateField(field.id, { options: newOpts, rules: (field.rules || []).map(rule => rule.value === opt ? { ...rule, value: e.target.value } : rule) });
                             }}
                           />
                           <button className="btn-icon btn-ghost" onClick={() => {
                             if (field.options.length <= 1) return;
-                            updateField(field.id, { options: field.options.filter((_, i) => i !== oIdx) });
+                            updateField(field.id, { options: field.options.filter((_, i) => i !== oIdx), rules: (field.rules || []).filter(rule => rule.value !== opt) });
                           }}><Icon name="close" /></button>
                         </div>
                       ))}
@@ -273,7 +296,8 @@ export default function SurveyBuilderPage({ params }) {
                   )}
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '1.5rem', paddingTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                <SurveyLogicEditor field={field} fields={fields} index={index} onChange={updates => updateField(field.id, updates)} />
+                {field.type !== 'section' && <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '1.5rem', paddingTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
                     <span style={{ fontWeight: 500 }}>Bắt buộc trả lời</span>
                     <div style={{ position: 'relative', width: '40px', height: '24px', background: field.required ? 'var(--accent-primary)' : 'var(--bg-tertiary)', borderRadius: '12px', transition: '0.3s' }}>
@@ -281,15 +305,16 @@ export default function SurveyBuilderPage({ params }) {
                     </div>
                     <input type="checkbox" style={{ display: 'none' }} checked={field.required} onChange={e => updateField(field.id, { required: e.target.checked })} />
                   </label>
-                </div>
+                </div>}
               </div>
             </div>
           ))}
 
-          <div style={{ display: 'flex', justifyContent: 'center', margin: '2rem 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap', margin: '2rem 0' }}>
             <button className="btn btn-primary btn-lg" onClick={() => setShowFieldPicker(true)} style={{ borderRadius: '50px', padding: '12px 24px', boxShadow: 'var(--shadow-md)' }}>
               + Thêm câu hỏi mới
             </button>
+            <button className="btn btn-secondary" onClick={() => handleAddField('section')}>+ Chia phần</button>
           </div>
         </div>
 
@@ -304,87 +329,8 @@ export default function SurveyBuilderPage({ params }) {
             <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>{survey.title || 'Tiêu đề khảo sát'}</h1>
             {survey.description && <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', whiteSpace: 'pre-wrap' }}>{survey.description}</p>}
             
-            <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', marginBottom: '2rem', fontSize: '0.875rem' }}>
-              * Bắt buộc
-            </div>
+            <SurveyFlowPreview key={JSON.stringify(fields)} fields={fields} />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <RespondentFields disabled />
-
-              <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '1rem 0' }} />
-
-              {/* Dynamic Fields */}
-              {fields.map(field => (
-                <div key={field.id}>
-                  <label className="form-label" style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>
-                    {field.label} {field.required && <span style={{ color: 'var(--danger)' }}>*</span>}
-                  </label>
-                  
-                  {['short_text', 'phone', 'email', 'date'].includes(field.type) && (
-                    <input type={field.type === 'date' ? 'date' : 'text'} className="form-input" placeholder={field.placeholder || ''} disabled />
-                  )}
-                  
-                  {field.type === 'long_text' && (
-                    <textarea className="form-textarea" placeholder={field.placeholder || ''} disabled></textarea>
-                  )}
-
-                  {field.type === 'multiple_choice' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {field.options.map((opt, i) => (
-                        <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'not-allowed', opacity: 0.8 }}>
-                          <input type="radio" className="form-radio" disabled />
-                          <span>{opt}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-
-                  {field.type === 'checkbox' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {field.options.map((opt, i) => (
-                        <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'not-allowed', opacity: 0.8 }}>
-                          <input type="checkbox" className="form-checkbox" disabled />
-                          <span>{opt}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-
-                  {field.type === 'dropdown' && (
-                    <select className="form-select" disabled>
-                      <option>Chọn một tùy chọn</option>
-                      {field.options.map((opt, i) => <option key={i}>{opt}</option>)}
-                    </select>
-                  )}
-
-                  {field.type === 'rating' && (
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      {Array(field.max || 5).fill(0).map((_, i) => (
-                        <span key={i} style={{ fontSize: '1.5rem', color: 'var(--text-muted)' }}>☆</span>
-                      ))}
-                    </div>
-                  )}
-
-                  {field.type === 'linear_scale' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-                      <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{field.minLabel}</span>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {Array.from({ length: (field.max || 5) - (field.min || 1) + 1 }, (_, i) => (field.min || 1) + i).map(n => (
-                          <div key={n} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-glass)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                            {n}
-                          </div>
-                        ))}
-                      </div>
-                      <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{field.maxLabel}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-              
-              <button className="btn btn-primary" style={{ marginTop: '1rem', width: '100%', padding: '12px' }} disabled>
-                Gửi Phản Hồi
-              </button>
-            </div>
           </div>
           </div>
         </div>
