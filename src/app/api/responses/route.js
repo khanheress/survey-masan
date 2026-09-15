@@ -44,7 +44,9 @@ export async function GET(request) {
     const responses = (await db.prepare(query).all(...params)).map((row) => {
       let answers = {};
       try {answers = JSON.parse(row.data_json || '{}');} catch {}
-      return { ...row, answers_json: answers, projectName: row.project_name, surveyName: row.survey_title };
+      const safeAnswers = Object.fromEntries(Object.entries(answers).map(([key,value]) => [key, value?.kind === 'file'
+        ? {kind:'file',name:value.name,mime:value.mime,size:value.size,downloadUrl:`/api/responses/${encodeURIComponent(row.id)}/files/${encodeURIComponent(key)}`} : value]));
+      return { ...row, data_json: JSON.stringify(safeAnswers), answers_json: safeAnswers, projectName: row.project_name, surveyName: row.survey_title };
     });
 
     return NextResponse.json({

@@ -1,8 +1,9 @@
+import { ADVANCED_TYPES, validateAdvancedDefinition, validateAdvancedAnswer, sectionVisible, selectedDetails, TOTAL_FILE_LIMIT } from './surveyAdvanced.mjs';
 export const END_MESSAGE = 'Cảm ơn bạn đã quan tâm. Câu trả lời của bạn chưa phù hợp với điều kiện tham gia khảo sát này.';
 export const BRANCH_TYPES = ['multiple_choice', 'dropdown', 'rating', 'linear_scale'];
-const TYPES = [...BRANCH_TYPES, 'short_text', 'long_text', 'checkbox', 'date', 'phone', 'email', 'section'];
+const TYPES = [...BRANCH_TYPES, 'short_text', 'long_text', 'checkbox', 'date', 'phone', 'email', 'section', ...ADVANCED_TYPES];
 const SPECIAL = ['next', 'complete', 'screenout'];
-export const hasAnswer = value => value !== undefined && value !== null && (Array.isArray(value) ? value.length > 0 : String(value).trim() !== '');
+export const hasAnswer = value => value !== undefined && value !== null && (Array.isArray(value) ? value.length > 0 : typeof value === 'object' ? Object.values(value).some(hasAnswer) : String(value).trim() !== '');
 export function branchValues(field) {
   if (['rating', 'linear_scale'].includes(field.type)) {
     const min = field.type === 'rating' ? 1 : (field.min ?? 1);
@@ -21,9 +22,11 @@ export function validateSurveyFields(fields) {
   if (!Array.isArray(fields) || fields.length > 500) return 'Khảo sát chỉ được có tối đa 500 câu hỏi và phần.';
   const ids = new Map();
   for (const [i, f] of fields.entries()) {
-    if (!f || typeof f.id !== 'string' || !f.id || SPECIAL.includes(f.id) || ids.has(f.id) || !TYPES.includes(f.type)) return 'Câu hỏi hoặc mã câu hỏi không hợp lệ / bị trùng.';
+    if (!f || typeof f.id !== 'string' || !f.id || [...SPECIAL, '__proto__', 'constructor', 'prototype'].includes(f.id) || ids.has(f.id) || !TYPES.includes(f.type)) return 'Câu hỏi hoặc mã câu hỏi không hợp lệ / bị trùng.';
     if (typeof f.label !== 'string' || !f.label.trim()) return 'Hãy nhập tiêu đề cho tất cả câu hỏi và phần.';
     ids.set(f.id, i);
+    const advancedError = validateAdvancedDefinition(f, fields, i);
+    if (advancedError) return advancedError;
     if (['multiple_choice', 'dropdown', 'checkbox'].includes(f.type) && (!Array.isArray(f.options) || !f.options.length || f.options.some(v => typeof v !== 'string' || !v.trim()) || new Set(f.options).size !== f.options.length)) return `“${f.label}”: các lựa chọn phải có nội dung và không trùng nhau.`;
     if (['rating', 'linear_scale'].includes(f.type) && !branchValues(f).length) return `“${f.label}”: thang điểm không hợp lệ.`;
     if (f.rules !== undefined && !Array.isArray(f.rules)) return `“${f.label}”: quy tắc không hợp lệ.`;
@@ -58,10 +61,29 @@ export function evaluateSurvey(fields, answers = {}) {
   const result = (status, extra = {}) => ({ status, visible, answers: clean, ...extra });
   while (index < fields.length) {
     const field = fields[index];
-    if (field.type === 'section') { activeSection = field; visible.push(field); index++; }
+    if (field.type === 'section') {
+      if (!sectionVisible(field.visibility, clean)) {
+        const nextSection = fields.findIndex((f, i) => i > index && f.type === 'section');
+        index = nextSection < 0 ? fields.length : nextSection;
+        activeSection = null;
+        continue;
+      }
+      activeSection = field; visible.push(field); index++;
+    }
     else {
+      if (field.type === 'detail_followup' && !selectedDetails(field, clean).length) {
+        index++;
+        if (index === fields.length || fields[index].type === 'section') {
+          const after = activeSection?.after;
+          if (after === 'complete') return result('complete');
+          if (after && after !== 'next') index = indexOf.get(after);
+          activeSection = null;
+        }
+        continue;
+      }
       visible.push(field);
-      const value = answers[field.id];
+      const value = field.type === 'detail_followup' && answers[field.id] && typeof answers[field.id] === 'object'
+        ? Object.fromEntries(selectedDetails(field, clean).filter(k => Object.hasOwn(answers[field.id],k)).map(k=>[k,answers[field.id][k]])) : answers[field.id];
       if (hasAnswer(value)) clean[field.id] = value;
       if (field.rules?.length && !hasAnswer(value)) return result('pending');
       const rule = field.rules?.find(r => r.value === String(value));
@@ -71,6 +93,10 @@ export function evaluateSurvey(fields, answers = {}) {
         const target = indexOf.get(rule.target);
         // Enter the containing section even when a branch points directly to its question.
         const owner = fields.slice(0, target + 1).findLast(f => f.type === 'section');
+        if (owner && !sectionVisible(owner.visibility, clean)) {
+          const nextSection = fields.findIndex((f,i)=>i>target && f.type === 'section');
+          index = nextSection < 0 ? fields.length : nextSection; activeSection = null; continue;
+        }
         if (owner && owner.id !== activeSection?.id && fields[target].type !== 'section') visible.push(owner);
         activeSection = owner || null;
         index = target;
@@ -92,7 +118,8 @@ export function changeSurveyAnswer(fields, previous, id, value) {
   // Only a changed branching answer invalidates downstream answers. Ordinary edits preserve them.
   const index = fields.findIndex(f => f.id === id);
   if (index < 0) return previous;
-  if (!fields[index].rules?.length || Object.is(previous[id], value)) return evaluateSurvey(fields, { ...previous, [id]: value }).answers;
+  const affectsLater = fields[index].rules?.length || fields.some(f => f.sourceId === id || f.visibility?.some(g => g.some(c => c.questionId === id)) || (f.label || '').includes(`{{q:${id}}}`));
+  if (!affectsLater || Object.is(previous[id], value)) return evaluateSurvey(fields, { ...previous, [id]: value }).answers;
   const retained = Object.fromEntries(fields.slice(0, index).filter(f => Object.hasOwn(previous, f.id)).map(f => [f.id, previous[f.id]]));
   const next = { ...retained, [id]: value };
   return evaluateSurvey(fields, next).answers;
@@ -106,11 +133,18 @@ export function validateSurveyAnswers(fields, answers) {
     const value = flow.answers[field.id];
     if ((field.required || field.rules?.length) && !hasAnswer(value)) return { ...flow, error: `Vui lòng trả lời câu hỏi: ${field.label}` };
     if (!hasAnswer(value)) continue;
+    if (ADVANCED_TYPES.includes(field.type)) {
+      const error = validateAdvancedAnswer(field,value,flow.answers);
+      if (error) return { ...flow,error };
+      continue;
+    }
     const choice = ['multiple_choice', 'dropdown'].includes(field.type);
     if ((choice && (typeof value !== 'string' || !field.options.includes(value))) ||
         (field.type === 'checkbox' && (!Array.isArray(value) || value.some(v => !field.options.includes(v)))) ||
         (['rating', 'linear_scale'].includes(field.type) && (!['number', 'string'].includes(typeof value) || !branchValues(field).includes(String(value)))) ||
         (!choice && !['checkbox', 'rating', 'linear_scale'].includes(field.type) && typeof value !== 'string')) return { ...flow, error: `Câu trả lời không hợp lệ: ${field.label}` };
   }
+  const fileTotal = fields.filter(f=>f.type==='file').reduce((total,f)=>total+(flow.answers[f.id]?.size || 0),0);
+  if (fileTotal > TOTAL_FILE_LIMIT) return {...flow,error:'Tổng tệp đính kèm tối đa 1 MB. Vui lòng chọn tệp nhỏ hơn.'};
   return flow;
 }

@@ -1,3 +1,4 @@
+import { formatAnswer, validateAdvancedAnswer } from '../src/lib/surveyAdvanced.mjs';
 import * as surveyFlow from '../src/lib/surveyFlow.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,7 +29,7 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     ]));
     await migrateResponseProfile(db);
     await initializeParticipantStore(db);
-    const context = vm.createContext({ URL, console });
+    const context = vm.createContext({ URL, console, Buffer });
     let signedIn = true;
     let role = 'admin';
     const imports = {
@@ -37,6 +38,7 @@ test('submission, listing and CSV retain all profile fields and answers', async 
       '@/lib/authOptions': { authOptions: {} },
       '@/lib/db': { getDb: () => db },
       '@/lib/surveyFlow.mjs': surveyFlow,
+      '@/lib/surveyAdvanced.mjs': { formatAnswer, validateAdvancedAnswer },
       '@/lib/respondent.mjs': { validateRespondent, RESPONDENT_FIELDS },
       '@/lib/participantStore.mjs': { recordParticipant, listParticipants },
       '@/lib/surveyAvailability.mjs': { getSurveyAvailability },
@@ -141,5 +143,25 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     assert.equal(afterDelete.responses.some(item => item.id === saved.id), false);
     // Deletion frees the previous phone only in this survey, allowing a fresh valid submission.
     assert.equal((await route.POST(request({...payload,answers_json:{gate:'Có',shown:'new submission'}}))).status, 201);
+    const fileBytes = Buffer.from('%PDF-1.4\nExample');
+    const file = {kind:'file',name:'test.pdf',mime:'application/pdf',size:fileBytes.length,data:fileBytes.toString('base64')};
+    await db.prepare('UPDATE surveys SET fields_json = ?').run(JSON.stringify([{id:'file',type:'file',label:'Tệp',required:true}]));
+    const uploaded = await route.POST(request({...payload,respondent_phone:'0900000002',answers_json:{file}}));
+    assert.equal(uploaded.status,201);
+    const uploadId = (await uploaded.json()).id;
+    const publicMetadata = await (await route.GET(new Request('http://localhost/api/responses'))).json();
+    const listedFile = publicMetadata.responses.find(r=>r.id===uploadId);
+    assert.equal(listedFile.answers_json.file.data,undefined);
+    assert.ok(!listedFile.data_json.includes(file.data));
+    const downloadRoute = await loadRoute('../src/app/api/responses/[id]/files/[fieldId]/route.js');
+    const fileContext = {params:Promise.resolve({id:uploadId,fieldId:'file'})};
+    signedIn = false;
+    assert.equal((await downloadRoute.GET(new Request('http://localhost/file'),fileContext)).status,401);
+    signedIn = true;
+    const download = await downloadRoute.GET(new Request('http://localhost/file'),fileContext);
+    assert.equal(download.status,200);
+    assert.equal(download.headers.get('Cache-Control'),'private, no-store');
+    assert.deepEqual(Buffer.from(await download.arrayBuffer()),fileBytes);
+    assert.equal((await downloadRoute.GET(new Request('http://localhost/file'),{params:Promise.resolve({id:uploadId,fieldId:'missing'})})).status,404);
   } finally {await db.close();}
 });

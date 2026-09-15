@@ -1,5 +1,7 @@
 'use client';
 import { useId } from 'react';
+import AdvancedSurveyQuestion from './AdvancedSurveyQuestion';
+import { ADVANCED_TYPES, pipeText } from '@/lib/surveyAdvanced.mjs';
 export default function SurveyQuestions({ flow, answers, onChange }) {
   const groupId = useId();
   const handleAnswerChange = (id, value, checkbox = false) => {
@@ -9,13 +11,14 @@ export default function SurveyQuestions({ flow, answers, onChange }) {
   return <div className="survey-questions">
           {/* Dynamic Fields */}
           {flow.visible.map((field, index) => field.type === 'section' ? (
-            <section key={field.id} className="survey-section-heading"><h2>{field.label}</h2>{field.description && <p>{field.description}</p>}</section>
+            <section key={field.id} className="survey-section-heading"><h2>{pipeText(field.label, answers)}</h2>{field.description && <p>{pipeText(field.description, answers)}</p>}</section>
           ) : (
             <div key={field.id} className="card" style={{ marginBottom: '1.5rem', background: 'var(--bg-secondary)' }}>
               <label className="form-label" style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>
-                {flow.visible.slice(0, index + 1).filter(item => item.type !== 'section').length}. {field.label} {(field.required || Boolean(field.rules?.length)) && <span style={{ color: 'var(--danger)' }}>*</span>}
+                {flow.visible.slice(0, index + 1).filter(item => item.type !== 'section').length}. {pipeText(field.label, answers)} {(field.required || Boolean(field.rules?.length)) && <span style={{ color: 'var(--danger)' }}>*</span>}
               </label>
 
+              {ADVANCED_TYPES.includes(field.type) && <AdvancedSurveyQuestion field={field} value={answers[field.id]} answers={answers} onChange={value => onChange(field.id,value)} />}
               {['short_text', 'phone', 'email'].includes(field.type) && (
                 <input 
                   type={field.type === 'phone' ? 'tel' : field.type === 'email' ? 'email' : 'text'} 
@@ -100,7 +103,7 @@ export default function SurveyQuestions({ flow, answers, onChange }) {
                     <button 
                       key={i}
                       type="button"
-                      aria-label={`${i + 1} sao`}
+                      aria-label={`${i + 1} điểm`}
                       aria-pressed={answers[field.id] === i + 1}
                       onClick={() => handleAnswerChange(field.id, i + 1)}
                       style={{ 
@@ -109,7 +112,7 @@ export default function SurveyQuestions({ flow, answers, onChange }) {
                         transition: 'color 0.2s'
                       }}
                     >
-                      ★
+                      {field.ratingIcon === 'heart' ? '♥' : field.ratingIcon === 'smile' ? '☺' : '★'}
                     </button>
                   ))}
                 </div>

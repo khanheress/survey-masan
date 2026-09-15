@@ -1,6 +1,7 @@
 'use client';
 
 import Icon from '@/components/Icon';
+import SurveyAnswerValue from '@/components/SurveyAnswerValue';
 import { useSession } from 'next-auth/react';
 import RespondentDetails from '@/components/RespondentDetails';
 import { downloadCsv } from '@/lib/downloadCsv';
@@ -217,7 +218,7 @@ export default function ResponsesPage() {
                 <div key={questionId}>
                   <div style={{ fontWeight: 500, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>{questionId}</div>
                   <div style={{ background: 'var(--bg-glass)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
-                    {Array.isArray(answer) ? answer.join(', ') : (answer?.toString() || '-')}
+                    <SurveyAnswerValue value={answer} />
                   </div>
                 </div>
               ))}

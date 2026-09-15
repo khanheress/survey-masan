@@ -1,3 +1,4 @@
+import { formatAnswer } from '@/lib/surveyAdvanced.mjs';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
@@ -47,7 +48,7 @@ export async function GET(request) {
         'Người mời': r.respondent_inviter,
         'Email': r.respondent_email,
         'Submitted At': r.created_at,
-        ...data
+        ...Object.fromEntries(Object.entries(data).map(([key,value])=>[key,formatAnswer(value)]))
       };
     });
 
