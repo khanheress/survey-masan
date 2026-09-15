@@ -4,6 +4,7 @@ import Icon from '@/components/Icon';
 import ProjectProgress from '@/components/ProjectProgress';
 import ProjectExport from '@/components/ProjectExport';
 import DeleteProject from '@/components/DeleteProject';
+import DeleteSurvey from '@/components/DeleteSurvey';
 import SurveyAnswerValue from '@/components/SurveyAnswerValue';
 import RespondentDetails from '@/components/RespondentDetails';
 import { downloadCsv } from '@/lib/downloadCsv';
@@ -223,10 +224,11 @@ export default function ProjectDetailPage({ params }) {
                     </div>
                   )}
                   
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', flexWrap: 'wrap' }}>
                     <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => router.push(`/admin/surveys/${survey.id}/builder`)}>
                       Chỉnh sửa
                     </button>
+                    <DeleteSurvey survey={survey} onDeleted={fetchProjectData} />
                   </div>
                 </div>
               ))}
