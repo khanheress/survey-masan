@@ -171,7 +171,7 @@ export default function ProjectsPage() {
         <div className="form-group">
           <label className="form-label">Trạng thái</label>
           <select name="status" className="form-select" value={formData.status} onChange={handleInputChange}>
-            <option value="active">Hoạt động</option>
+            <option value="active">Onfield</option>
             <option value="inactive">Đóng</option>
           </select>
         </div>
@@ -212,12 +212,12 @@ export default function ProjectsPage() {
               <div key={project.id} className="card" style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer' }} onClick={() => router.push(`/admin/projects/${project.id}`)}>
                 <div className="flex-between" style={{ marginBottom: '1rem' }}>
                   <span className={`badge ${project.status === 'active' ? 'badge-active' : 'badge-inactive'}`}>
-                    {project.status === 'active' ? 'Hoạt động' : 'Đóng'}
+                    {project.status === 'active' ? 'Onfield' : 'Đóng'}
                   </span>
                   {isAdmin && (
                     <div style={{ display: 'flex', gap: '0.5rem' }} onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-secondary btn-sm" aria-label="Chỉnh sửa dự án" onClick={() => openEditModal(project)}><Icon name="edit" /> Chỉnh sửa</button>
-                      <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} aria-label="Xóa dự án" onClick={() => openDeleteModal(project)}><Icon name="trash" /> Xóa dự án</button>
+                      <button className="btn btn-secondary btn-icon" title="Chỉnh sửa dự án" aria-label="Chỉnh sửa dự án" onClick={() => openEditModal(project)}><Icon name="edit" /></button>
+                      <button className="btn btn-secondary btn-icon" style={{ color: 'var(--danger)' }} title="Xóa dự án" aria-label="Xóa dự án" onClick={() => openDeleteModal(project)}><Icon name="trash" /></button>
                     </div>
                   )}
                 </div>

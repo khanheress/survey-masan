@@ -126,7 +126,7 @@ export default function ProjectDetailPage({ params }) {
         <div className="flex-between" style={{ marginBottom: '1rem' }}>
           <h1 className="page-title" style={{ margin: 0 }}>{project.name}</h1>
           <span className={`badge ${project.status === 'active' ? 'badge-active' : 'badge-inactive'}`} style={{ fontSize: '1rem', padding: '6px 16px' }}>
-            {project.status === 'active' ? 'Hoạt động' : 'Đóng'}
+            {project.status === 'active' ? 'Onfield' : 'Đóng'}
           </span>
         </div>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '1.1rem' }}>
