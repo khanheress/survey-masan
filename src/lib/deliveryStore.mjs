@@ -23,6 +23,10 @@ export async function getProjectDeliveries(db,projectId){
   const state=byId.get(id);
   people.set(id,{participant_id:id,name:profile.respondent_name||'',phone:profile.respondent_phone||'',address:profile.respondent_address||'',delivered:Boolean(state?.delivered),notes:state?.notes||'',updated_at:state?.updated_at||null});
  }
+ if(await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='project_members'").get()){
+  const imported=await db.prepare("SELECT m.participant_id,p.profile_json FROM project_members m JOIN participants p ON p.id=m.participant_id WHERE m.project_id = ? AND m.review_status='approved'").all(projectId);
+  for(const row of imported){if(people.has(row.participant_id))continue;const profile=JSON.parse(row.profile_json),state=byId.get(row.participant_id);people.set(row.participant_id,{participant_id:row.participant_id,name:profile.respondent_name||'',phone:profile.respondent_phone||'',address:profile.respondent_address||'',delivered:Boolean(state?.delivered),notes:state?.notes||'',updated_at:state?.updated_at||null});}
+ }
  const list=[...people.values()].sort((a,b)=>a.name.localeCompare(b.name,'vi'));
  return {project,people:list,total:list.length,delivered:list.filter(p=>p.delivered).length};
 }

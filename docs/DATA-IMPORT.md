@@ -21,3 +21,13 @@ Mỗi dòng là một hồ sơ. Tối đa 1.000 dòng dữ liệu, file 2 MB. Kh
 Chọn file rồi **Kiểm tra và xem trước**, sau đó **Nhập N hồ sơ hợp lệ**. Màn hình ghi rõ dòng lỗi và dòng trùng. Số điện thoại đã có hoặc lặp lại trong file bị bỏ qua toàn bộ dòng; không ghi đè hay thêm dự án cho hồ sơ cũ. Có thể sửa dòng lỗi rồi nhập lại cùng file mà không thêm trùng hồ sơ.
 
 Dữ liệu được kiểm tra lại trên máy chủ khi lưu, kể cả khi có người khác vừa nhập cùng số điện thoại. Lỗi cơ sở dữ liệu sẽ hoàn tác toàn bộ lần nhập. Nhập Excel không tạo phản hồi khảo sát, không tăng chỉ tiêu khảo sát và không tự duyệt người tham gia hay đưa vào danh sách Giao mẫu. Hồ sơ không có dự án vẫn tìm kiếm và lọc người mời được.
+
+## Nhập trực tiếp vào một dự án
+
+Mở dự án → **Người tham gia (Excel) → Nhập người tham gia từ Excel**. Dùng cùng file mẫu theo thứ tự Tên, Năm sinh, Số điện thoại, Địa chỉ, Nghề nghiệp, Tình trạng hôn nhân, Dự án tham gia, Người mời. Tên, Số điện thoại, Nghề nghiệp và Người mời bắt buộc. Cột Dự án tham gia có thể bỏ trống: đích nhập luôn là dự án đang mở, bất kể nội dung cột này.
+
+Kiểm tra xem trước rồi nhập các dòng hợp lệ. Người mới được tạo hồ sơ trong Quản lý data; người đã có được dùng lại hồ sơ hiện tại (không ghi đè thông tin). Hồ sơ đã có phản hồi hoặc đã được nhập vào dự án sẽ bị bỏ qua, giữ trạng thái duyệt hiện có. Nhập lại cùng file không thêm trùng.
+
+Người nhập thành công được **cho tham gia ngay** và xuất hiện trong **Giao mẫu**. Có thể đổi sang Chờ duyệt hoặc Không cho tham gia ở bảng Người tham gia (Excel). Quản trị viên có thể chỉnh sửa thông tin trong Quản lý data; thay đổi được hiển thị lại ở dự án và Giao mẫu.
+
+Đây là danh sách được quản trị viên duyệt trực tiếp, không qua điều kiện tuổi/BUMO hoặc chỉ tiêu của luồng điền khảo sát. Không tạo câu trả lời hay tăng số phản hồi khảo sát. Khi xóa dự án, danh sách trực tiếp và trạng thái giao mẫu bị xóa cùng dự án; hồ sơ và lịch sử trong Quản lý data được giữ lại.

@@ -25,6 +25,7 @@ export async function editParticipant(db,id,values){
   const overrides={...JSON.parse(person.profile_overrides_json||'{}'),...values};
   await db.prepare('UPDATE participants SET id = ?, phone = ?, name = ?, profile_json = ?, profile_overrides_json = ? WHERE id = ?').run(newId,phone||null,profile.respondent_name||'',JSON.stringify(profile),JSON.stringify(overrides),id);
   if(newId!==id){
+   if(await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='project_members'").get())await db.prepare('UPDATE project_members SET participant_id = ? WHERE participant_id = ?').run(newId,id);
    await db.prepare('UPDATE participant_history SET participant_id = ? WHERE participant_id = ?').run(newId,id);
    if(await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sample_deliveries'").get())await db.prepare('UPDATE sample_deliveries SET participant_id = ? WHERE participant_id = ?').run(newId,id);
   }

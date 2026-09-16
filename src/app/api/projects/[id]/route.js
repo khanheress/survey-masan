@@ -71,6 +71,7 @@ export async function DELETE(request, context) {
       await db.prepare('DELETE FROM recall_bookings WHERE form_id IN (SELECT id FROM recall_forms WHERE project_id = ?)').run(id);
       await db.prepare('DELETE FROM recall_slots WHERE form_id IN (SELECT id FROM recall_forms WHERE project_id = ?)').run(id);
       await db.prepare('DELETE FROM recall_forms WHERE project_id = ?').run(id);
+      await db.prepare('DELETE FROM project_members WHERE project_id = ?').run(id);
       await db.prepare('DELETE FROM sample_deliveries WHERE project_id = ?').run(id);
       await db.prepare('DELETE FROM responses WHERE project_id = ?').run(id);
       await db.prepare('DELETE FROM surveys WHERE project_id = ?').run(id);

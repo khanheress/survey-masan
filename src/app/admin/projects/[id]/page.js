@@ -1,5 +1,6 @@
 'use client';
 
+import ProjectMembers from '@/components/ProjectMembers';
 import Icon from '@/components/Icon';
 import ProjectProgress from '@/components/ProjectProgress';
 import ProjectExport from '@/components/ProjectExport';
@@ -178,7 +179,8 @@ export default function ProjectDetailPage({ params }) {
         </button>
       </div>
 
-      <div style={{marginBottom:20}}><button className={activeTab==='recall'?'btn btn-primary':'btn btn-secondary'} onClick={()=>setActiveTab('recall')}>Form Recall của dự án</button></div>
+      <div className="flex gap-2" style={{marginBottom:20,flexWrap:'wrap'}}><button className={activeTab==='members'?'btn btn-primary':'btn btn-secondary'} onClick={()=>setActiveTab('members')}>Người tham gia (Excel)</button><button className={activeTab==='recall'?'btn btn-primary':'btn btn-secondary'} onClick={()=>setActiveTab('recall')}>Form Recall của dự án</button></div>
+      {activeTab==='members'&&<ProjectMembers projectId={id} projectName={project.name}/>}
       {activeTab==='recall'&&<RecallManager projectId={id} projectName={project.name}/>}
       {activeTab === 'surveys' && (
         <div>
