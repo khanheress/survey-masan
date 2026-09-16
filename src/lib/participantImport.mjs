@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import {createHash} from 'node:crypto';
 import {normalizePhone} from './participantStore.mjs';
 import {INVITERS,MARITAL_STATUSES} from './respondent.mjs';
-export const IMPORT_HEADERS=['Tên','Số điện thoại','Nghề nghiệp','Người mời','Dự án tham gia','Năm sinh','Địa chỉ','Tình trạng hôn nhân'];
+export const IMPORT_HEADERS=['Tên','Năm sinh','Số điện thoại','Địa chỉ','Nghề nghiệp','Tình trạng hôn nhân','Dự án tham gia','Người mời'];
 const key=value=>String(value).trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().replace(/\s+/g,' ');
 function cellText(cell){const value=cell.value;if(value==null)return '';if(typeof value==='object')throw Error('Chỉ nhập văn bản hoặc số, không dùng công thức, liên kết hay ô đặc biệt.');return String(value).trim();}
 export async function parseParticipantWorkbook(buffer){
@@ -11,12 +11,12 @@ export async function parseParticipantWorkbook(buffer){
  if(sheet.rowCount>1001||sheet.columnCount>50)throw Error('Mỗi file tối đa 1.000 dòng dữ liệu và 50 cột.');
  const headers=new Map();sheet.getRow(1).eachCell((cell,index)=>{const name=key(cellText(cell));if(headers.has(name))throw Error('Tên cột bị trùng.');headers.set(name,index);});
  const columns=IMPORT_HEADERS.map(label=>headers.get(key(label))||(label==='Nghề nghiệp'?headers.get(key('Nghề nghiệp hiện tại')):undefined));
- if(columns.slice(0,4).some(c=>!c))throw Error('Thiếu cột bắt buộc: Tên, Số điện thoại, Nghề nghiệp, Người mời.');
+ if(['Tên','Số điện thoại','Nghề nghiệp','Người mời'].some(label=>!columns[IMPORT_HEADERS.indexOf(label)]))throw Error('Thiếu cột bắt buộc: Tên, Số điện thoại, Nghề nghiệp, Người mời.');
  const rows=[];
  for(let n=2;n<=sheet.rowCount;n++){
   const row=sheet.getRow(n);if(!row.hasValues)continue;
   try{const values=columns.map(c=>c?cellText(row.getCell(c)):'');if(values.every(v=>!v))continue;
-   const [name,rawPhone,occupation,rawInviter,project,rawBirthYear,address,rawMaritalStatus]=values;
+   const [name,rawBirthYear,rawPhone,address,occupation,rawMaritalStatus,project,rawInviter]=values;
    const phone=normalizePhone(rawPhone),inviter=INVITERS.find(v=>key(v)===key(rawInviter));
    if(!name||!occupation||!rawPhone||!rawInviter)throw Error('Thiếu tên, số điện thoại, nghề nghiệp hoặc người mời.');
    if(name.length>200||occupation.length>200||project.length>200)throw Error('Tên, nghề nghiệp và dự án tối đa 200 ký tự.');

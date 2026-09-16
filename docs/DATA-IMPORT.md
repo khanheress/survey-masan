@@ -6,13 +6,13 @@ Quản trị viên vào **Quản lý data → Nhập Excel .xlsx → Tải file 
 | Cột | Nội dung |
 | --- | --- |
 | Tên | Bắt buộc, tối đa 200 ký tự |
-| Số điện thoại | Bắt buộc, định dạng Văn bản để giữ số 0 đầu; nhận +84/0084 và chuẩn hóa về 0 |
-| Nghề nghiệp | Bắt buộc, tối đa 200 ký tự; cũng nhận tiêu đề Nghề nghiệp hiện tại |
-| Người mời | Khánh hoặc Tế |
-| Dự án tham gia | Không bắt buộc; tên dự án, tối đa 200 ký tự |
 | Năm sinh | Không bắt buộc, số nguyên từ 1900 đến năm hiện tại |
+| Số điện thoại | Bắt buộc, định dạng Văn bản để giữ số 0 đầu; nhận +84/0084 và chuẩn hóa về 0 |
 | Địa chỉ | Không bắt buộc, tối đa 1.000 ký tự |
+| Nghề nghiệp | Bắt buộc, tối đa 200 ký tự; cũng nhận tiêu đề Nghề nghiệp hiện tại |
 | Tình trạng hôn nhân | Không bắt buộc: Độc thân, Đã kết hôn - chưa con, Đã kết hôn - có con |
+| Dự án tham gia | Không bắt buộc; tên dự án, tối đa 200 ký tự |
+| Người mời | Khánh hoặc Tế |
 
 File cũ không có ba cột bổ sung vẫn nhập được. Các giá trị bổ sung được lưu vào hồ sơ và hiển thị trong màn hình xem trước.
 
