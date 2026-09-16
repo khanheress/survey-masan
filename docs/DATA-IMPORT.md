@@ -10,6 +10,11 @@ Quản trị viên vào **Quản lý data → Nhập Excel .xlsx → Tải file 
 | Nghề nghiệp | Bắt buộc, tối đa 200 ký tự; cũng nhận tiêu đề Nghề nghiệp hiện tại |
 | Người mời | Khánh hoặc Tế |
 | Dự án tham gia | Không bắt buộc; tên dự án, tối đa 200 ký tự |
+| Năm sinh | Không bắt buộc, số nguyên từ 1900 đến năm hiện tại |
+| Địa chỉ | Không bắt buộc, tối đa 1.000 ký tự |
+| Tình trạng hôn nhân | Không bắt buộc: Độc thân, Đã kết hôn - chưa con, Đã kết hôn - có con |
+
+File cũ không có ba cột bổ sung vẫn nhập được. Các giá trị bổ sung được lưu vào hồ sơ và hiển thị trong màn hình xem trước.
 
 Mỗi dòng là một hồ sơ. Tối đa 1.000 dòng dữ liệu, file 2 MB. Không dùng công thức. Cột có thể đổi vị trí. Dự án có tên tương ứng được liên kết vào lịch sử; tên dự án chưa tồn tại được lưu như lịch sử cũ, không tạo dự án mới. Nếu nhiều dự án trùng tên, dòng đó báo lỗi để tránh liên kết sai.
 

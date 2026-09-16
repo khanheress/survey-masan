@@ -1,8 +1,8 @@
 import ExcelJS from 'exceljs';
 import {createHash} from 'node:crypto';
 import {normalizePhone} from './participantStore.mjs';
-import {INVITERS} from './respondent.mjs';
-export const IMPORT_HEADERS=['Tên','Số điện thoại','Nghề nghiệp','Người mời','Dự án tham gia'];
+import {INVITERS,MARITAL_STATUSES} from './respondent.mjs';
+export const IMPORT_HEADERS=['Tên','Số điện thoại','Nghề nghiệp','Người mời','Dự án tham gia','Năm sinh','Địa chỉ','Tình trạng hôn nhân'];
 const key=value=>String(value).trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().replace(/\s+/g,' ');
 function cellText(cell){const value=cell.value;if(value==null)return '';if(typeof value==='object')throw Error('Chỉ nhập văn bản hoặc số, không dùng công thức, liên kết hay ô đặc biệt.');return String(value).trim();}
 export async function parseParticipantWorkbook(buffer){
@@ -16,13 +16,18 @@ export async function parseParticipantWorkbook(buffer){
  for(let n=2;n<=sheet.rowCount;n++){
   const row=sheet.getRow(n);if(!row.hasValues)continue;
   try{const values=columns.map(c=>c?cellText(row.getCell(c)):'');if(values.every(v=>!v))continue;
-   const [name,rawPhone,occupation,rawInviter,project]=values;
+   const [name,rawPhone,occupation,rawInviter,project,rawBirthYear,address,rawMaritalStatus]=values;
    const phone=normalizePhone(rawPhone),inviter=INVITERS.find(v=>key(v)===key(rawInviter));
    if(!name||!occupation||!rawPhone||!rawInviter)throw Error('Thiếu tên, số điện thoại, nghề nghiệp hoặc người mời.');
    if(name.length>200||occupation.length>200||project.length>200)throw Error('Tên, nghề nghiệp và dự án tối đa 200 ký tự.');
    if(!/^0\d{9,10}$/.test(phone))throw Error('Số điện thoại không hợp lệ. Định dạng cột là Văn bản để giữ số 0 đầu.');
    if(!inviter)throw Error('Người mời phải là Khánh hoặc Tế.');
-   rows.push({row:n,name,phone,occupation,inviter,project});
+   const currentYear=new Date().getFullYear();
+   if(rawBirthYear&&(!/^\d{4}$/.test(rawBirthYear)||Number(rawBirthYear)<1900||Number(rawBirthYear)>currentYear))throw Error(`Năm sinh phải từ 1900 đến ${currentYear}.`);
+   if(address.length>1000)throw Error('Địa chỉ tối đa 1.000 ký tự.');
+   const maritalStatus=rawMaritalStatus?MARITAL_STATUSES.find(v=>key(v)===key(rawMaritalStatus)):null;
+   if(rawMaritalStatus&&!maritalStatus)throw Error('Tình trạng hôn nhân: Độc thân, Đã kết hôn - chưa con hoặc Đã kết hôn - có con.');
+   rows.push({row:n,name,phone,occupation,inviter,project,birthYear:rawBirthYear?Number(rawBirthYear):null,address:address||null,maritalStatus});
   }catch(e){rows.push({row:n,error:e.message});}
  }
  if(!rows.length)throw Error('File chưa có dữ liệu.');return rows;
@@ -39,7 +44,7 @@ export async function importParticipants(db,rows,commit=false){
    seen.add(row.phone);result.push({...row,status:'ready'});
    if(!commit)continue;
    const id=`phone:${row.phone}`,now=new Date().toISOString();
-   const profile={respondent_name:row.name,respondent_phone:row.phone,respondent_occupation:row.occupation,respondent_inviter:row.inviter};
+   const profile={respondent_name:row.name,respondent_phone:row.phone,respondent_occupation:row.occupation,respondent_inviter:row.inviter,respondent_birth_year:row.birthYear??null,respondent_address:row.address||null,respondent_marital_status:row.maritalStatus||null};
    await db.prepare('INSERT INTO participants (id,phone,name,profile_json,first_seen,last_seen) VALUES (?,?,?,?,?,?)').run(id,row.phone,row.name,JSON.stringify(profile),now,now);
    if(row.project){const project=matches[0];const historyId='import:'+createHash('sha256').update(id+'|'+row.project).digest('hex');await db.prepare('INSERT INTO participant_history (response_id,participant_id,project_id,project_name,survey_id,survey_title,inviter,submitted_at) VALUES (?,?,?,?,NULL,?,?,?)').run(historyId,id,project?.id||null,project?.name||row.project,'Nhập từ Excel',row.inviter,now);}
    added++;

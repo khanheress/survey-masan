@@ -30,3 +30,23 @@ test('ambiguous projects are rejected and database errors roll back the entire i
  await db.exec("CREATE TRIGGER fail_import BEFORE INSERT ON participant_history BEGIN SELECT RAISE(ABORT,'test failure'); END;");const valid=await parseParticipantWorkbook(await workbook([['An','0901234567','NV','Tế'],['B','0901234568','NV','Tế','Cũ']]));await assert.rejects(()=>importParticipants(db,valid,true));assert.equal((await listParticipants(db)).pagination.total,0);
  }finally{await db.close();}
 });
+
+test('optional profile columns are saved; old templates and empty optional cells remain supported',async()=>{
+ const db=await fixture();try{
+ const rows=await parseParticipantWorkbook(await workbook([
+ ['An','0901234501','NV','Khánh','',1995,'12 Đường A','Đã kết hôn - có con'],
+ ['B','0901234502','NV','Tế','','','',''],
+ ]));
+ assert.equal(rows[0].birthYear,1995);assert.equal(rows[0].address,'12 Đường A');assert.equal(rows[0].maritalStatus,'Đã kết hôn - có con');
+ assert.equal(rows[1].birthYear,null);assert.equal(rows[1].maritalStatus,null);
+ await importParticipants(db,rows,true);
+ const person=(await listParticipants(db,{search:'0901234501'})).participants[0];assert.equal(person.respondent_birth_year,1995);assert.equal(person.respondent_address,'12 Đường A');assert.equal(person.respondent_marital_status,'Đã kết hôn - có con');
+ const legacy=await parseParticipantWorkbook(await workbook([['C','0901234503','NV','Tế','']],IMPORT_HEADERS.slice(0,5)));assert.equal(legacy[0].birthYear,null);assert.equal(legacy[0].address,null);assert.equal(legacy[0].maritalStatus,null);assert.equal((await importParticipants(db,legacy,true)).added,1);
+ }finally{await db.close();}
+});
+test('optional fields validate nonempty values and accept reordered headers',async()=>{
+ const input=(year,address='',marital='')=>['An','0901234501','NV','Khánh','',year,address,marital];
+ const rows=await parseParticipantWorkbook(await workbook([input('1899'),input(String(new Date().getFullYear()+1)),input('1995.5'),input('abc'),input('', 'a'.repeat(1001)),input('','','Không rõ'),input(1900,'','Độc thân'),input(new Date().getFullYear(),'','Đã kết hôn - chưa con')]));
+ assert.ok(rows.slice(0,6).every(r=>r.error));assert.ok(rows.slice(6).every(r=>!r.error));
+ const reordered=await parseParticipantWorkbook(await workbook([['Địa chỉ mới','An','0901234501',1990,'Độc thân','NV','Tế']],['Địa chỉ','Tên','Số điện thoại','Năm sinh','Tình trạng hôn nhân','Nghề nghiệp','Người mời']));assert.equal(reordered[0].birthYear,1990);assert.equal(reordered[0].address,'Địa chỉ mới');
+});
