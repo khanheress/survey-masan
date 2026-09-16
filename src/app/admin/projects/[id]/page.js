@@ -1,5 +1,7 @@
 'use client';
 
+import ProjectSummaryEditor from '@/components/ProjectSummaryEditor';
+import SummaryPreview from '@/components/SummaryPreview';
 import ProjectMembers from '@/components/ProjectMembers';
 import Icon from '@/components/Icon';
 import ProjectProgress from '@/components/ProjectProgress';
@@ -179,7 +181,8 @@ export default function ProjectDetailPage({ params }) {
         </button>
       </div>
 
-      <div className="flex gap-2" style={{marginBottom:20,flexWrap:'wrap'}}><button className={activeTab==='members'?'btn btn-primary':'btn btn-secondary'} onClick={()=>setActiveTab('members')}>Người tham gia (Excel)</button><button className={activeTab==='recall'?'btn btn-primary':'btn btn-secondary'} onClick={()=>setActiveTab('recall')}>Form Recall của dự án</button></div>
+      <div className="flex gap-2" style={{marginBottom:20,flexWrap:'wrap'}}><button className={activeTab==='summary'?'btn btn-primary':'btn btn-secondary'} onClick={()=>setActiveTab('summary')}>Mẫu tóm tắt</button><button className={activeTab==='members'?'btn btn-primary':'btn btn-secondary'} onClick={()=>setActiveTab('members')}>Người tham gia (Excel)</button><button className={activeTab==='recall'?'btn btn-primary':'btn btn-secondary'} onClick={()=>setActiveTab('recall')}>Form Recall của dự án</button></div>
+      {activeTab==='summary'&&<ProjectSummaryEditor projectId={id}/>}
       {activeTab==='members'&&<ProjectMembers projectId={id} projectName={project.name}/>}
       {activeTab==='recall'&&<RecallManager projectId={id} projectName={project.name}/>}
       {activeTab === 'surveys' && (
@@ -310,7 +313,7 @@ export default function ProjectDetailPage({ params }) {
       <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md">
         {selectedResponse && (
           <div>
-            <RespondentDetails response={selectedResponse} />
+            <RespondentDetails response={selectedResponse} /><SummaryPreview key={selectedResponse.id} projectId={id} responseId={selectedResponse.id}/>
 
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-color)' }}>
               Nội dung trả lời

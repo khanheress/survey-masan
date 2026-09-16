@@ -1,4 +1,5 @@
 'use client';
+import SummaryPreview from '@/components/SummaryPreview';
 
 import Icon from '@/components/Icon';
 import ResponseReview from '@/components/ResponseReview';
@@ -225,7 +226,7 @@ export default function ResponsesPage() {
       <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md" footer={canDelete && <button className="btn btn-danger" onClick={() => { setPendingDelete(selectedResponse); setSelectedResponse(null); }}><Icon name="trash" /> Xóa phản hồi này</button>}>
         {selectedResponse && (
           <div>
-            <RespondentDetails response={selectedResponse} /><ResponseReview response={selectedResponse} onSaved={review_status=>{setSelectedResponse({...selectedResponse,review_status});refresh();}}/>
+            <RespondentDetails response={selectedResponse} /><SummaryPreview key={selectedResponse.id} projectId={selectedResponse.project_id} responseId={selectedResponse.id}/><ResponseReview response={selectedResponse} onSaved={review_status=>{setSelectedResponse({...selectedResponse,review_status});refresh();}}/>
 
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-color)' }}>
               Nội dung trả lời

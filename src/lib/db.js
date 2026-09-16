@@ -1,3 +1,4 @@
+import {initializeSummaryStore} from './participantSummary.mjs';
 import {initializeProjectMembers} from './projectMembers.mjs';
 import {initializeDeliveryStore} from './deliveryStore.mjs';
 import { migrateProjectRules } from './projectRules.mjs';
@@ -57,6 +58,7 @@ async function initializeDb(dbInstance) {
   `));
 
   await migrateProjectRules(dbInstance);
+  await withDatabaseStage('summary_schema', () => initializeSummaryStore(dbInstance));
   await withDatabaseStage('response_migration', () => migrateResponseProfile(dbInstance));
   await withDatabaseStage('participant_migration', () => initializeParticipantStore(dbInstance));
   await withDatabaseStage('recall_schema', () => initializeRecallStore(dbInstance));
