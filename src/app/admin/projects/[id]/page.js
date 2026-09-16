@@ -5,6 +5,7 @@ import ProjectProgress from '@/components/ProjectProgress';
 import ProjectExport from '@/components/ProjectExport';
 import DeleteProject from '@/components/DeleteProject';
 import DeleteSurvey from '@/components/DeleteSurvey';
+import RecallManager from '@/components/RecallManager';
 import SurveyAnswerValue from '@/components/SurveyAnswerValue';
 import RespondentDetails from '@/components/RespondentDetails';
 import { downloadCsv } from '@/lib/downloadCsv';
@@ -177,6 +178,8 @@ export default function ProjectDetailPage({ params }) {
         </button>
       </div>
 
+      <div style={{marginBottom:20}}><button className={activeTab==='recall'?'btn btn-primary':'btn btn-secondary'} onClick={()=>setActiveTab('recall')}>Form Recall của dự án</button></div>
+      {activeTab==='recall'&&<RecallManager projectId={id} projectName={project.name}/>}
       {activeTab === 'surveys' && (
         <div>
           <div className="flex-between" style={{ marginBottom: '1.5rem' }}>

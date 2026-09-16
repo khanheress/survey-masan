@@ -21,6 +21,11 @@ export async function initializeRecallStore(db) {
     UNIQUE(form_id, starts_at, phone)
   );
   CREATE INDEX IF NOT EXISTS recall_bookings_slot ON recall_bookings(form_id, starts_at);`);
+  await db.transaction(async()=>{
+    const columns=new Set((await db.prepare('PRAGMA table_info(recall_forms)').all()).map(c=>c.name));
+    if(!columns.has('project_id'))await db.exec('ALTER TABLE recall_forms ADD COLUMN project_id TEXT');
+    await db.exec('CREATE INDEX IF NOT EXISTS recall_forms_project ON recall_forms(project_id)');
+  })();
 }
 
 function validateForm(input) {
@@ -43,7 +48,7 @@ function validateForm(input) {
 export function canManageRecall(form, user) {return user?.role === 'admin' || form.created_by === user?.id;}
 
 export async function getRecallForm(db, id) {
-  const form = await db.prepare('SELECT * FROM recall_forms WHERE id = ?').get(id);
+  const form = await db.prepare('SELECT f.*, p.name AS project_name FROM recall_forms f LEFT JOIN projects p ON p.id=f.project_id WHERE f.id = ?').get(id);
   if (!form) throw new RecallError('Không tìm thấy Form Recall.', 404);
   const slots = await db.prepare(`SELECT s.starts_at, COUNT(b.id) AS booked_count FROM recall_slots s
     LEFT JOIN recall_bookings b ON b.form_id = s.form_id AND b.starts_at = s.starts_at
@@ -54,19 +59,25 @@ export async function getRecallForm(db, id) {
 export async function saveRecallForm(db, input, user, id = null) {
   const settings = validateForm(input);
   return await db.transaction(async () => {
+    const previous=id?await getRecallForm(db,id):null;
+    if(previous&&!canManageRecall(previous,user))throw new RecallError('Bạn không có quyền sửa form này.',403);
+    const projectId=input.project_id===undefined?previous?.project_id:input.project_id;
+    if(!projectId&&!previous)throw new RecallError('Vui lòng chọn dự án cho Form Recall.');
+    if(projectId&&(typeof projectId!=='string'||!await db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)))throw new RecallError('Dự án không tồn tại.',404);
+    if(previous?.project_id&&projectId!==previous.project_id)throw new RecallError('Không thể chuyển form đã gắn sang dự án khác.',409);
     if (id) {
       const existing = await getRecallForm(db, id);
       if (!canManageRecall(existing, user)) throw new RecallError('Bạn không có quyền sửa form này.', 403);
       const bookedSlots = existing.slots.filter((slot) => slot.booked_count > 0);
       if (bookedSlots.some((slot) => !settings.slots.includes(slot.starts_at))) throw new RecallError('Không thể xóa hoặc đổi giờ đã có người đăng ký.', 409);
       if (!settings.allow_overlap && bookedSlots.some((slot) => slot.booked_count > 1)) throw new RecallError('Form đã có nhiều người cùng giờ; chưa thể đổi sang mỗi giờ một người.', 409);
-      await db.prepare('UPDATE recall_forms SET title = ?, description = ?, allow_overlap = ?, is_open = ? WHERE id = ?').
-      run(settings.title, settings.description, settings.allow_overlap, settings.is_open, id);
+      await db.prepare('UPDATE recall_forms SET title = ?, description = ?, allow_overlap = ?, is_open = ?, project_id = ? WHERE id = ?').
+      run(settings.title, settings.description, settings.allow_overlap, settings.is_open, projectId||null, id);
       await db.prepare('DELETE FROM recall_slots WHERE form_id = ?').run(id);
     } else {
       id = randomUUID();
-      await db.prepare('INSERT INTO recall_forms (id, title, description, share_token, allow_overlap, is_open, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)').
-      run(id, settings.title, settings.description, randomUUID(), settings.allow_overlap, settings.is_open, user.id);
+      await db.prepare('INSERT INTO recall_forms (id, title, description, share_token, allow_overlap, is_open, created_by, project_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').
+      run(id, settings.title, settings.description, randomUUID(), settings.allow_overlap, settings.is_open, user.id, projectId);
     }
     const insert = db.prepare('INSERT INTO recall_slots (form_id, starts_at) VALUES (?, ?)');
     for (const slot of settings.slots) await insert.run(id, slot);
@@ -80,7 +91,7 @@ export async function publicRecallForm(db, token, now = new Date()) {
   const form = await getRecallForm(db, found.id);
   if (!form.is_open) throw new RecallError('Form Recall hiện đã đóng đăng ký.', 410);
   return {
-    title: form.title, description: form.description, allow_overlap: Boolean(form.allow_overlap),
+    title: form.title, project_name: form.project_name, description: form.description, allow_overlap: Boolean(form.allow_overlap),
     slots: form.slots.map((slot) => ({ starts_at: slot.starts_at,
       available: new Date(`${slot.starts_at}:00+07:00`) > now && (Boolean(form.allow_overlap) || slot.booked_count === 0)
     }))

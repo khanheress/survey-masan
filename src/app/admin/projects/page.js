@@ -295,7 +295,7 @@ export default function ProjectsPage() {
       >
         <div style={{ padding: '1rem 0' }}>
           Bạn có chắc chắn muốn xóa dự án <strong>{currentProject?.name}</strong>?
-          Thao tác này sẽ xóa toàn bộ khảo sát và phản hồi liên quan và không thể hoàn tác. Hồ sơ và lịch sử trong Quản lý data vẫn được lưu.
+          Thao tác này sẽ xóa toàn bộ khảo sát, phản hồi, Form Recall, lịch đăng ký và thông tin giao mẫu liên quan và không thể hoàn tác. Hồ sơ và lịch sử trong Quản lý data vẫn được lưu.
         </div>
         <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
           <button type="button" className="btn btn-ghost" onClick={() => setIsDeleteModalOpen(false)}>Hủy</button>

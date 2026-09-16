@@ -1,9 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import useRemoteData from '@/hooks/useRemoteData';
 import Icon from './Icon';
 
-export default function RecallEditor({ initialForm, onSaved, onClose }) {
+export default function RecallEditor({ initialForm, onSaved, onClose, projectId, projectName }) {
+  const [selectedProject,setSelectedProject]=useState(initialForm?.project_id || (projectId==='unassigned'?'':projectId) || '');
+  const loadProjects=useCallback(async signal=>{const res=await fetch('/api/projects',{signal});if(!res.ok)throw Error();return res.json();},[]);
+  const {data:projects}=useRemoteData(loadProjects,[],'Không thể tải danh sách dự án.',projectId==='unassigned');
   const [title, setTitle] = useState(initialForm?.title || '');
   const [description, setDescription] = useState(initialForm?.description || '');
   const [allowOverlap, setAllowOverlap] = useState(Boolean(initialForm?.allow_overlap));
@@ -22,7 +26,7 @@ export default function RecallEditor({ initialForm, onSaved, onClose }) {
     try {
       const response = await fetch(initialForm ? `/api/recall/${initialForm.id}` : '/api/recall', {
         method: initialForm ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, allow_overlap: allowOverlap, is_open: isOpen, slots: slots.map(slot => `${slot.date}T${slot.time}`) }),
+        body: JSON.stringify({ project_id:selectedProject, title, description, allow_overlap: allowOverlap, is_open: isOpen, slots: slots.map(slot => `${slot.date}T${slot.time}`) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Không thể lưu form.');
@@ -36,6 +40,7 @@ export default function RecallEditor({ initialForm, onSaved, onClose }) {
     <form onSubmit={save}>
       {error && <p className="recall-error" role="alert">{error}</p>}
       <fieldset className="recall-fieldset" disabled={saving}>
+        {projectId==='unassigned'?<label className="form-label">Gắn vào dự án<select aria-label="Gắn vào dự án" className="form-select" required value={selectedProject} onChange={e=>setSelectedProject(e.target.value)}><option value="">Chọn dự án</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>:<p style={{marginBottom:16}}>Dự án: <strong>{projectName}</strong></p>}
         <div className="form-group"><label className="form-label" htmlFor="recall-title">Tên form *</label><input id="recall-title" className="form-input" required maxLength={200} value={title} onChange={event => setTitle(event.target.value)} placeholder="Ví dụ: Đăng ký lịch phỏng vấn" /></div>
         <div className="form-group"><label className="form-label" htmlFor="recall-description">Mô tả / hướng dẫn</label><textarea id="recall-description" className="form-textarea" maxLength={5000} value={description} onChange={event => setDescription(event.target.value)} placeholder="Địa điểm, hướng dẫn hoặc thông tin cần lưu ý…" /></div>
         <div className="form-group"><label className="form-label" htmlFor="recall-mode">Số người trong một khung giờ</label>

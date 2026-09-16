@@ -68,6 +68,10 @@ export async function DELETE(request, context) {
     if (!existing) return NextResponse.json({ error: 'Không tìm thấy dự án' }, { status: 404 });
 
     const transaction = db.transaction(async () => {
+      await db.prepare('DELETE FROM recall_bookings WHERE form_id IN (SELECT id FROM recall_forms WHERE project_id = ?)').run(id);
+      await db.prepare('DELETE FROM recall_slots WHERE form_id IN (SELECT id FROM recall_forms WHERE project_id = ?)').run(id);
+      await db.prepare('DELETE FROM recall_forms WHERE project_id = ?').run(id);
+      await db.prepare('DELETE FROM sample_deliveries WHERE project_id = ?').run(id);
       await db.prepare('DELETE FROM responses WHERE project_id = ?').run(id);
       await db.prepare('DELETE FROM surveys WHERE project_id = ?').run(id);
       await db.prepare('DELETE FROM projects WHERE id = ?').run(id);

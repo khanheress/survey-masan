@@ -66,7 +66,7 @@ function RecallRegistration({ token }) {
 
   return <div className="public-form-card">
     <span className="badge badge-completed">Form Recall</span><h1 className="recall-public-title">{form.title}</h1>
-    {form.description && <p className="recall-description">{form.description}</p>}
+    {form.project_name&&<p className="form-hint">Dự án: {form.project_name}</p>}{form.description && <p className="recall-description">{form.description}</p>}
     <p className="form-hint">Điền thông tin và chọn lịch hẹn. Các mục có dấu * là bắt buộc. Giờ Việt Nam (UTC+7).</p>
     {!anyAvailable && <p className="recall-error" role="status">Hiện không còn khung giờ khả dụng. Vui lòng liên hệ người tạo form.</p>}
     {error && <p className="recall-error" role="alert">{error}</p>}

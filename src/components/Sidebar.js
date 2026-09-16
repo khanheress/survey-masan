@@ -17,6 +17,7 @@ export default function Sidebar() {
     { href: '/admin/projects', label: 'Dự án', icon: <Icon name="folder" /> },
     { href: '/admin/responses', label: 'Phản hồi', icon: <Icon name="file" /> },
     { href: '/admin/recall', label: 'Form Recall', icon: <Icon name="calendar" /> },
+    { href: '/admin/deliveries', label: 'Giao mẫu', icon: <Icon name="check-square" /> },
     { href: '/admin/data', label: 'Quản lý data', icon: <Icon name="database" /> },
   ];
 

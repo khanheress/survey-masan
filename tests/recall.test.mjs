@@ -9,10 +9,10 @@ import { Worker } from 'node:worker_threads';
 import { initializeRecallStore, saveRecallForm, publicRecallForm, bookRecall, getRecallForm } from '../src/lib/recallStore.mjs';
 
 const user = { id: 'owner', role: 'moderator' };
-const settings = { title: 'Form thử', description: 'Lịch hẹn', allow_overlap: false, is_open: true, slots: ['2030-10-01T09:00', '2030-10-01T10:00'] };
+const settings = { project_id:'p', title: 'Form thử', description: 'Lịch hẹn', allow_overlap: false, is_open: true, slots: ['2030-10-01T09:00', '2030-10-01T10:00'] };
 const now = new Date('2030-09-30T00:00:00Z');
 const booking = { name: 'Nguyễn An', phone: '0901234567', starts_at: settings.slots[0] };
-const setup = async () => {const db = new Database(':memory:');await initializeRecallStore(db);return db;};
+const setup = async () => {const db = new Database(':memory:');await db.exec("CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,name TEXT); INSERT OR IGNORE INTO projects VALUES ('p','Dự án thử');");await initializeRecallStore(db);return db;};
 
 test('unique token, dates and public payload; no attendee personal data exposed', async () => {
   const db = await setup();
@@ -93,7 +93,7 @@ test('two simultaneous connections cannot double-book an exclusive slot', async 
   const dir = await mkdtemp(path.join(tmpdir(), 'recall-race-'));
   const dbPath = path.join(dir, 'test.db');
   const db = new Database(dbPath);
-  await initializeRecallStore(db);
+  await db.exec("CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,name TEXT); INSERT OR IGNORE INTO projects VALUES ('p','Dự án thử');");await initializeRecallStore(db);
   const form = await saveRecallForm(db, settings, user);
   await db.close();
   const workers = [];
@@ -130,4 +130,17 @@ test('two simultaneous connections cannot double-book an exclusive slot', async 
     await Promise.all(workers.map((worker) => worker.terminate()));
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('project required for new forms, fixed once assigned, and legacy form migration preserves bookings and link',async()=>{
+ const db=await setup();try{
+  await assert.rejects(saveRecallForm(db,{...settings,project_id:undefined},user),e=>e.status===400);
+  await assert.rejects(saveRecallForm(db,{...settings,project_id:'missing'},user),e=>e.status===404);
+  const form=await saveRecallForm(db,settings,user);assert.equal(form.project_id,'p');assert.equal(form.project_name,'Dự án thử');
+  await db.exec("INSERT INTO projects VALUES ('p2','Dự án khác')");await assert.rejects(saveRecallForm(db,{...settings,project_id:'p2'},user,form.id),e=>e.status===409);
+  await bookRecall(db,form.share_token,booking,now);
+  await db.prepare('UPDATE recall_forms SET project_id = NULL WHERE id = ?').run(form.id);
+  await initializeRecallStore(db);const legacy=await getRecallForm(db,form.id);assert.equal(legacy.share_token,form.share_token);assert.equal(legacy.booking_count,1);
+  const assigned=await saveRecallForm(db,settings,user,form.id);assert.equal(assigned.booking_count,1);assert.equal(assigned.share_token,form.share_token);assert.equal(assigned.project_id,'p');
+ }finally{await db.close();}
 });

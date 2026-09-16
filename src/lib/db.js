@@ -1,3 +1,4 @@
+import {initializeDeliveryStore} from './deliveryStore.mjs';
 import { migrateProjectRules } from './projectRules.mjs';
 import path from 'path';
 import { withDatabaseStage } from './databaseDiagnostic.mjs';
@@ -58,6 +59,7 @@ async function initializeDb(dbInstance) {
   await withDatabaseStage('response_migration', () => migrateResponseProfile(dbInstance));
   await withDatabaseStage('participant_migration', () => initializeParticipantStore(dbInstance));
   await withDatabaseStage('recall_schema', () => initializeRecallStore(dbInstance));
+  await withDatabaseStage('delivery_schema', () => initializeDeliveryStore(dbInstance));
 
   await withDatabaseStage('admin_bootstrap', () => bootstrapAdmin(dbInstance));
 }
