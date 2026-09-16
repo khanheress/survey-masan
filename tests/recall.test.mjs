@@ -144,3 +144,17 @@ test('project required for new forms, fixed once assigned, and legacy form migra
   const assigned=await saveRecallForm(db,settings,user,form.id);assert.equal(assigned.booking_count,1);assert.equal(assigned.share_token,form.share_token);assert.equal(assigned.project_id,'p');
  }finally{await db.close();}
 });
+
+test('quick schedule is generated on server, persists settings and retains existing bookings on regeneration',async()=>{
+ const db=await setup();try{
+  const schedule={dates:['2030-10-15','2030-10-16','2030-10-17'],start:'09:40',end:'20:00',interval:20,breaks:[{start:'12:10',end:'12:59'},{start:'18:00',end:'19:00'}]};
+  const form=await saveRecallForm(db,{...settings,schedule,slots:['2030-10-15T18:20']},user);
+  assert.equal(form.slots.length,81);assert.deepEqual(form.schedule,schedule);assert.ok(!form.slots.some(s=>s.starts_at==='2030-10-15T18:20'));
+  await bookRecall(db,form.share_token,{...booking,starts_at:'2030-10-15T09:40'},now);
+  const edited=await saveRecallForm(db,{...settings,schedule:{...schedule,dates:['2030-10-16']}},user,form.id);
+  assert.equal(edited.slots.length,28);assert.equal(edited.booking_count,1);assert.equal(edited.share_token,form.share_token);
+  await initializeRecallStore(db);assert.deepEqual((await getRecallForm(db,form.id)).schedule.dates,['2030-10-16']);
+  await assert.rejects(saveRecallForm(db,{...settings,schedule:{...schedule,interval:0}},user,form.id),e=>e.status===400);
+  assert.equal((await getRecallForm(db,form.id)).slots.length,28);
+ }finally{await db.close();}
+});

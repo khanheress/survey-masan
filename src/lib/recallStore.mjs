@@ -1,3 +1,4 @@
+import {resolveRecallSchedule} from './recallSchedule.mjs';
 import { randomUUID } from 'node:crypto';
 import { normalizePhone } from './participantStore.mjs';
 
@@ -23,6 +24,7 @@ export async function initializeRecallStore(db) {
   CREATE INDEX IF NOT EXISTS recall_bookings_slot ON recall_bookings(form_id, starts_at);`);
   await db.transaction(async()=>{
     const columns=new Set((await db.prepare('PRAGMA table_info(recall_forms)').all()).map(c=>c.name));
+    if(!columns.has('schedule_json'))await db.exec('ALTER TABLE recall_forms ADD COLUMN schedule_json TEXT');
     if(!columns.has('project_id'))await db.exec('ALTER TABLE recall_forms ADD COLUMN project_id TEXT');
     await db.exec('CREATE INDEX IF NOT EXISTS recall_forms_project ON recall_forms(project_id)');
   })();
@@ -53,14 +55,17 @@ export async function getRecallForm(db, id) {
   const slots = await db.prepare(`SELECT s.starts_at, COUNT(b.id) AS booked_count FROM recall_slots s
     LEFT JOIN recall_bookings b ON b.form_id = s.form_id AND b.starts_at = s.starts_at
     WHERE s.form_id = ? GROUP BY s.starts_at ORDER BY s.starts_at`).all(id);
-  return { ...form, slots, booking_count: slots.reduce((sum, slot) => sum + slot.booked_count, 0) };
+  return { ...form, schedule:form.schedule_json?JSON.parse(form.schedule_json):null, slots, booking_count: slots.reduce((sum, slot) => sum + slot.booked_count, 0) };
 }
 
 export async function saveRecallForm(db, input, user, id = null) {
-  const settings = validateForm(input);
   return await db.transaction(async () => {
     const previous=id?await getRecallForm(db,id):null;
     if(previous&&!canManageRecall(previous,user))throw new RecallError('Bạn không có quyền sửa form này.',403);
+    let planned=input.slots;
+    if(input.schedule!=null){try{planned=resolveRecallSchedule(input.schedule,previous?.slots||[]).slots;}catch(e){throw new RecallError(e.message);}}
+    const settings=validateForm({...input,slots:planned});
+    const scheduleJson=input.schedule==null?null:JSON.stringify({dates:[...new Set(input.schedule.dates)].sort(),start:input.schedule.start,end:input.schedule.end,interval:input.schedule.interval,breaks:input.schedule.breaks.map(b=>({start:b.start,end:b.end}))});
     const projectId=input.project_id===undefined?previous?.project_id:input.project_id;
     if(!projectId&&!previous)throw new RecallError('Vui lòng chọn dự án cho Form Recall.');
     if(projectId&&(typeof projectId!=='string'||!await db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)))throw new RecallError('Dự án không tồn tại.',404);
@@ -71,13 +76,13 @@ export async function saveRecallForm(db, input, user, id = null) {
       const bookedSlots = existing.slots.filter((slot) => slot.booked_count > 0);
       if (bookedSlots.some((slot) => !settings.slots.includes(slot.starts_at))) throw new RecallError('Không thể xóa hoặc đổi giờ đã có người đăng ký.', 409);
       if (!settings.allow_overlap && bookedSlots.some((slot) => slot.booked_count > 1)) throw new RecallError('Form đã có nhiều người cùng giờ; chưa thể đổi sang mỗi giờ một người.', 409);
-      await db.prepare('UPDATE recall_forms SET title = ?, description = ?, allow_overlap = ?, is_open = ?, project_id = ? WHERE id = ?').
-      run(settings.title, settings.description, settings.allow_overlap, settings.is_open, projectId||null, id);
+      await db.prepare('UPDATE recall_forms SET title = ?, description = ?, allow_overlap = ?, is_open = ?, project_id = ?, schedule_json = ? WHERE id = ?').
+      run(settings.title, settings.description, settings.allow_overlap, settings.is_open, projectId||null, scheduleJson, id);
       await db.prepare('DELETE FROM recall_slots WHERE form_id = ?').run(id);
     } else {
       id = randomUUID();
-      await db.prepare('INSERT INTO recall_forms (id, title, description, share_token, allow_overlap, is_open, created_by, project_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').
-      run(id, settings.title, settings.description, randomUUID(), settings.allow_overlap, settings.is_open, user.id, projectId);
+      await db.prepare('INSERT INTO recall_forms (id, title, description, share_token, allow_overlap, is_open, created_by, project_id, schedule_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').
+      run(id, settings.title, settings.description, randomUUID(), settings.allow_overlap, settings.is_open, user.id, projectId, scheduleJson);
     }
     const insert = db.prepare('INSERT INTO recall_slots (form_id, starts_at) VALUES (?, ?)');
     for (const slot of settings.slots) await insert.run(id, slot);

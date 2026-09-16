@@ -24,3 +24,18 @@ Mỗi dòng gồm tên, số điện thoại, địa chỉ, ô **Đã giao / Ch�
 Xóa dự án sẽ xóa các Form Recall, lượt đăng ký, khung giờ và bản ghi giao mẫu của dự án đó. Hồ sơ và lịch sử khảo sát trong Quản lý data vẫn được giữ.
 
 Các bảng/cột mới được tạo tự động khi ứng dụng kết nối database sau triển khai; không cần chạy SQL thủ công.
+
+## Tạo nhanh lịch Recall
+
+Form mới mặc định dùng **Tạo nhanh theo ngày và khoảng giờ**:
+
+1. Chọn tháng, bấm các ngày cần nhận đăng ký (có thể chọn nhiều ngày ở nhiều tháng).
+2. Nhập giờ bắt đầu, giờ kết thúc và khoảng cách giữa các mốc giờ, tính bằng phút.
+3. Thêm các khoảng nghỉ trưa, nghỉ tối hoặc thời gian không nhận đăng ký. Các khoảng nghỉ áp dụng cho tất cả ngày đã chọn.
+4. Kiểm tra phần **Xem trước** rồi lưu form. Lịch được tạo tự động khi lưu, không cần nhập từng dòng.
+
+Các mốc tính đều từ giờ bắt đầu; không bắt đầu lại nhịp sau khoảng nghỉ. Bỏ các mốc từ đầu giờ nghỉ đến trước cuối giờ nghỉ. Mốc tại giờ kết thúc được nhận nếu khớp nhịp. Đây là giờ đăng ký, không phải thời lượng cuộc hẹn.
+
+Ví dụ ngày 15, 16, 17; từ 09:40 đến 20:00; cách 20 phút; nghỉ 12:10–12:59 và 18:00–19:00: mỗi ngày có 27 mốc, tổng 81 mốc. Không có 12:20, 12:40, 18:00, 18:20, 18:40; có 13:00 và 19:00.
+
+Thiết lập tạo nhanh được lưu để tiếp tục chỉnh sửa. Khi tạo lại lịch, các giờ đã có người đăng ký được giữ nguyên dù nằm ngoài lịch mới, và phần xem trước báo số giờ được giữ thêm. Form cũ vẫn có chế độ **Nhập từng khung giờ**; có thể chuyển giữa hai cách tạo lịch. Tối đa 500 khung giờ mỗi form.
