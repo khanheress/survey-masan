@@ -65,8 +65,9 @@ export async function listParticipants(db, { search = '', projectId = '', invite
   if (projectId || inviter) {
     const historyConditions = ['h.participant_id = p.id'];
     if (projectId) {historyConditions.push('h.project_id = ?');args.push(projectId);}
-    if (inviter) {historyConditions.push('h.inviter = ?');args.push(inviter);}
-    conditions.push(`EXISTS (SELECT 1 FROM participant_history h WHERE ${historyConditions.join(' AND ')})`);
+    if (inviter && projectId) {historyConditions.push('h.inviter = ?');args.push(inviter);}
+    if(projectId)conditions.push(`EXISTS (SELECT 1 FROM participant_history h WHERE ${historyConditions.join(' AND ')})`);
+    if(inviter&&!projectId){conditions.push("(json_extract(p.profile_json, '$.respondent_inviter') = ? OR EXISTS (SELECT 1 FROM participant_history h WHERE h.participant_id = p.id AND h.inviter = ?))");args.push(inviter,inviter);}
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const total = (await db.prepare(`SELECT COUNT(*) AS total FROM participants p ${where}`).get(...args)).total;

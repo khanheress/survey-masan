@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import Icon from '@/components/Icon';
 import {useSession} from 'next-auth/react';
+import ImportParticipants from '@/components/ImportParticipants';
 import EditParticipant from '@/components/EditParticipant';
 import Modal from '@/components/Modal';
 import RespondentDetails from '@/components/RespondentDetails';
@@ -17,6 +18,7 @@ const formatDate = value => new Date(value.includes('T') ? value : `${value.repl
 export default function DataPage() {
   const { addToast } = useToast();
   const {data:session}=useSession();
+  const [importing,setImporting]=useState(false);
   const [editing,setEditing]=useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [filters, setFilters] = useState({ search: '', project_id: '', inviter: '', page: 1 });
@@ -47,11 +49,11 @@ export default function DataPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Quản lý data</h1>
-          <p className="data-description">Thông tin người đã gửi khảo sát và các dự án đã tham gia.</p>
+          <p className="data-description">Hồ sơ từ khảo sát, file Excel và các dự án đã tham gia.</p>
         </div>
-        <button className="btn btn-primary" onClick={exportData} disabled={loading || exporting || data.pagination.total === 0}>
+        <div className="flex gap-2" style={{flexWrap:'wrap'}}>{session?.user?.role==='admin'&&<button className="btn btn-secondary" onClick={()=>setImporting(true)}>Nhập Excel .xlsx</button>}<button className="btn btn-primary" onClick={exportData} disabled={loading || exporting || data.pagination.total === 0}>
           <Icon name="download" /> {exporting ? 'Đang xuất…' : 'Xuất CSV'}
-        </button>
+        </button></div>
       </div>
 
       <form className="card data-filters" onSubmit={event => { event.preventDefault(); updateFilter('search', searchInput.trim()); }}>
@@ -87,7 +89,7 @@ export default function DataPage() {
       {loading ? <div className="skeleton" style={{ height: 280 }} /> : error ? (
         <div className="card empty-state"><p>Không thể tải dữ liệu.</p><button className="btn btn-secondary" onClick={refresh}>Thử lại</button></div>
       ) : data.participants.length === 0 ? (
-        <div className="card empty-state"><Icon name="database" size={24} /><h2 style={{ fontSize: '1.125rem', margin: '1rem 0 .5rem' }}>Chưa có hồ sơ phù hợp</h2><p>Hồ sơ tự động xuất hiện khi người tham gia gửi khảo sát. Bạn có thể thử thay đổi bộ lọc.</p></div>
+        <div className="card empty-state"><Icon name="database" size={24} /><h2 style={{ fontSize: '1.125rem', margin: '1rem 0 .5rem' }}>Chưa có hồ sơ phù hợp</h2><p>Hồ sơ được thêm từ khảo sát hoặc nhập Excel. Bạn có thể thử thay đổi bộ lọc.</p></div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
@@ -116,6 +118,7 @@ export default function DataPage() {
         </div>
       )}
 
+      {importing&&<ImportParticipants onClose={()=>setImporting(false)} onSaved={result=>{refresh();addToast(`Đã nhập ${result.added} hồ sơ`,'success');}}/>}
       {editing&&<EditParticipant person={editing} onClose={()=>setEditing(null)} onSaved={()=>{setEditing(null);setSelectedPerson(null);refresh();addToast('Đã cập nhật hồ sơ','success');}}/>}
       <Modal isOpen={!!selectedPerson} onClose={() => setSelectedPerson(null)} title="Hồ sơ người tham gia" size="lg">
         {selectedPerson && <>
