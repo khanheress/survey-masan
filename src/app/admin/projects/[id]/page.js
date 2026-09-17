@@ -1,5 +1,6 @@
 'use client';
 
+import CopyProject from '@/components/CopyProject';
 import ProjectSummaryEditor from '@/components/ProjectSummaryEditor';
 import SummaryPreview from '@/components/SummaryPreview';
 import ProjectMembers from '@/components/ProjectMembers';
@@ -153,7 +154,7 @@ export default function ProjectDetailPage({ params }) {
       </div>
 
       <section className="card" style={{marginBottom:'1rem'}}><h2>Tiến độ chỉ tiêu</h2><ProjectProgress project={project}/></section>
-      <div className="flex gap-2" style={{flexWrap:'wrap',marginBottom:20}}><ProjectExport projectId={id}/><DeleteProject project={project}/></div>
+      <div className="flex gap-2" style={{flexWrap:'wrap',marginBottom:20}}><ProjectExport projectId={id}/><CopyProject project={project}/><DeleteProject project={project}/></div>
       <div style={{ borderBottom: '1px solid var(--border-color)', marginBottom: '2rem', display: 'flex', gap: '2rem' }}>
         <button 
           className="btn-ghost" 

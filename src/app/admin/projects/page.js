@@ -1,5 +1,6 @@
 'use client';
 
+import CopyProject from '@/components/CopyProject';
 import Icon from '@/components/Icon';
 import ProjectRulesEditor from '@/components/ProjectRulesEditor';
 import {emptyProjectRules,parseProjectRules} from '@/lib/projectRules.mjs';
@@ -216,7 +217,7 @@ export default function ProjectsPage() {
                   </span>
                   {isAdmin && (
                     <div style={{ display: 'flex', gap: '0.5rem' }} onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-secondary btn-icon" title="Chỉnh sửa dự án" aria-label="Chỉnh sửa dự án" onClick={() => openEditModal(project)}><Icon name="edit" /></button>
+                      <CopyProject project={project}/><button className="btn btn-secondary btn-icon" title="Chỉnh sửa dự án" aria-label="Chỉnh sửa dự án" onClick={() => openEditModal(project)}><Icon name="edit" /></button>
                       <button className="btn btn-secondary btn-icon" style={{ color: 'var(--danger)' }} title="Xóa dự án" aria-label="Xóa dự án" onClick={() => openDeleteModal(project)}><Icon name="trash" /></button>
                     </div>
                   )}
