@@ -97,10 +97,11 @@ export default function DataPage() {
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table participant-table">
-              <thead><tr><th>Tên / Số điện thoại</th><th>Năm sinh</th><th>Nghề nghiệp</th><th>Người mời gần nhất</th><th>Dự án đã tham gia</th><th>Gần nhất</th><th>Thao tác</th></tr></thead>
+              <thead><tr><th>Tên</th><th>Số điện thoại</th><th>Năm sinh</th><th>Nghề nghiệp</th><th>Người mời gần nhất</th><th>Dự án đã tham gia</th><th>Gần nhất</th><th>Thao tác</th></tr></thead>
               <tbody>{data.participants.map(person => (
                 <tr key={person.id}>
-                  <td><strong>{person.respondent_name || 'Chưa có tên'}</strong><div className="data-description">{person.respondent_phone || 'Chưa có số điện thoại'}</div></td>
+                  <td><strong>{person.respondent_name || 'Chưa có tên'}</strong></td>
+                  <td style={{whiteSpace:'nowrap'}}>{person.respondent_phone || 'Chưa có số điện thoại'}</td>
                   <td>{person.respondent_birth_year || '—'}</td>
                   <td>{person.respondent_occupation || '—'}</td>
                   <td>{person.respondent_inviter || '—'}</td>
