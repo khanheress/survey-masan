@@ -1,3 +1,4 @@
+import {initializePerformanceIndexes} from './performanceIndexes.mjs';
 import {initializeSummaryStore} from './participantSummary.mjs';
 import {initializeProjectMembers} from './projectMembers.mjs';
 import {initializeDeliveryStore} from './deliveryStore.mjs';
@@ -65,6 +66,7 @@ async function initializeDb(dbInstance) {
   await withDatabaseStage('project_members', () => initializeProjectMembers(dbInstance));
   await withDatabaseStage('delivery_schema', () => initializeDeliveryStore(dbInstance));
 
+  await withDatabaseStage('performance_indexes', () => initializePerformanceIndexes(dbInstance));
   await withDatabaseStage('admin_bootstrap', () => bootstrapAdmin(dbInstance));
 }
 

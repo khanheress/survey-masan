@@ -43,3 +43,16 @@ export async function saveDelivery(db,projectId,input,userId){
   return result;
  })();
 }
+
+export async function listDeliveryProjects(db){
+ const projects=await db.prepare('SELECT id,name,status FROM projects ORDER BY created_at DESC,id').all();
+ const responses=await db.prepare("SELECT r.id,r.project_id,r.respondent_phone,h.participant_id FROM responses r LEFT JOIN participant_history h ON h.response_id=r.id WHERE r.review_status='approved'").all();
+ const members=await db.prepare("SELECT m.project_id,m.participant_id FROM project_members m JOIN participants p ON p.id=m.participant_id WHERE m.review_status='approved'").all();
+ const delivered=await db.prepare('SELECT project_id,participant_id FROM sample_deliveries WHERE delivered=1').all();
+ const eligible=new Map(),done=new Map();
+ const add=(map,project,id)=>{if(!map.has(project))map.set(project,new Set());map.get(project).add(id);};
+ for(const r of responses){const phone=normalizePhone(r.respondent_phone||'');add(eligible,r.project_id,r.participant_id||(phone?`phone:${phone}`:`response:${r.id}`));}
+ for(const m of members)add(eligible,m.project_id,m.participant_id);
+ for(const row of delivered)if(eligible.get(row.project_id)?.has(row.participant_id))add(done,row.project_id,row.participant_id);
+ return projects.map(p=>({...p,total:eligible.get(p.id)?.size||0,delivered:done.get(p.id)?.size||0}));
+}

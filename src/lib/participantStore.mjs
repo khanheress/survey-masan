@@ -78,12 +78,18 @@ export async function listParticipants(db, { search = '', projectId = '', invite
   const currentPage = Math.min(Math.max(1, Number.parseInt(page, 10) || 1), totalPages);
   const rows = await db.prepare(`SELECT p.* FROM participants p ${where} ORDER BY p.last_seen DESC, p.id ${exportAll ? '' : 'LIMIT ? OFFSET ?'}`).
   all(...args, ...(exportAll ? [] : [limit, (currentPage - 1) * limit]));
-  const historyQuery = db.prepare('SELECT * FROM participant_history WHERE participant_id = ? AND removed_from_profile = 0 ORDER BY submitted_at DESC, response_id');
-  const participants = await Promise.all(rows.map(async (row) => {
-    const history = await historyQuery.all(row.id);
-    const projects = [...new Map(history.map((item) => [JSON.stringify([item.project_id||null,item.project_id?null:item.project_name]), { id: item.project_id, name: item.project_name }])).values()];
-    return { id: row.id, ...JSON.parse(row.profile_json), first_seen: row.first_seen, last_seen: row.last_seen, projects, history };
-  }));
+  const histories=new Map();
+  // Fetch one page's histories in a single round trip; chunk large CSV exports.
+  for(let offset=0;offset<rows.length;offset+=500){
+    const ids=rows.slice(offset,offset+500).map(row=>row.id);
+    const batch=await db.prepare(`SELECT * FROM participant_history WHERE participant_id IN (${ids.map(()=>'?').join(',')}) AND removed_from_profile = 0 ORDER BY submitted_at DESC, response_id`).all(...ids);
+    for(const item of batch){if(!histories.has(item.participant_id))histories.set(item.participant_id,[]);histories.get(item.participant_id).push(item);}
+  }
+  const participants = rows.map(row => {
+    const history=histories.get(row.id)||[];
+    const projects=[...new Map(history.map(item=>[JSON.stringify([item.project_id||null,item.project_id?null:item.project_name]),{id:item.project_id,name:item.project_name}])).values()];
+    return {id:row.id,...JSON.parse(row.profile_json),first_seen:row.first_seen,last_seen:row.last_seen,projects,history};
+  });
   const projects = await db.prepare('SELECT project_id AS id, MAX(project_name) AS name FROM participant_history WHERE project_id IS NOT NULL AND removed_from_profile = 0 GROUP BY project_id ORDER BY name').all();
   return { participants, projects, pagination: { total, page: currentPage, limit, totalPages } };
 }

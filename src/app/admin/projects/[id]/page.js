@@ -1,15 +1,16 @@
 'use client';
+import dynamic from 'next/dynamic';
 
 import CopyProject from '@/components/CopyProject';
-import ProjectSummaryEditor from '@/components/ProjectSummaryEditor';
+const ProjectSummaryEditor=dynamic(()=>import('@/components/ProjectSummaryEditor'),{loading:()=> <p>Đang tải…</p>});
 import SummaryPreview from '@/components/SummaryPreview';
-import ProjectMembers from '@/components/ProjectMembers';
+const ProjectMembers=dynamic(()=>import('@/components/ProjectMembers'),{loading:()=> <p>Đang tải…</p>});
 import Icon from '@/components/Icon';
 import ProjectProgress from '@/components/ProjectProgress';
 import ProjectExport from '@/components/ProjectExport';
 import DeleteProject from '@/components/DeleteProject';
 import DeleteSurvey from '@/components/DeleteSurvey';
-import RecallManager from '@/components/RecallManager';
+const RecallManager=dynamic(()=>import('@/components/RecallManager'),{loading:()=> <p>Đang tải…</p>});
 import SurveyAnswerValue from '@/components/SurveyAnswerValue';
 import RespondentDetails from '@/components/RespondentDetails';
 import { downloadCsv } from '@/lib/downloadCsv';

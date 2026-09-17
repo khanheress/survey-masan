@@ -1,11 +1,12 @@
 'use client';
+import dynamic from 'next/dynamic';
 
 import { useCallback, useState } from 'react';
 import Icon from '@/components/Icon';
 import {useSession} from 'next-auth/react';
-import ParticipantProjects from '@/components/ParticipantProjects';
-import ImportParticipants from '@/components/ImportParticipants';
-import EditParticipant from '@/components/EditParticipant';
+const ParticipantProjects=dynamic(()=>import('@/components/ParticipantProjects'),{loading:()=> <p>Đang tải…</p>});
+const ImportParticipants=dynamic(()=>import('@/components/ImportParticipants'),{loading:()=> <p>Đang tải…</p>});
+const EditParticipant=dynamic(()=>import('@/components/EditParticipant'),{loading:()=> <p>Đang tải…</p>});
 import Modal from '@/components/Modal';
 import RespondentDetails from '@/components/RespondentDetails';
 import { useToast } from '@/components/Toast';

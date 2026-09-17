@@ -32,6 +32,9 @@ export function checkEligibility(rules,profile,answers={},fields=[],counts={},no
 }
 export async function projectQuotaCounts(db,projectId,rules){
  const rows=await db.prepare('SELECT respondent_gender, respondent_birth_year, respondent_age, respondent_bumo, created_at FROM responses WHERE project_id = ?').all(projectId);
+ return countProjectQuotaRows(rows,rules);
+}
+export function countProjectQuotaRows(rows,rules){
  const counts={total:rows.length,gender:{Nam:0,'Nữ':0},age:{},bumo:Object.create(null)};
  for(const row of rows){
   if(['Nam','Nữ'].includes(row.respondent_gender))counts.gender[row.respondent_gender]++;
