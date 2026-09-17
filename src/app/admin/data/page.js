@@ -106,7 +106,7 @@ export default function DataPage() {
                   <td>{person.respondent_inviter || '—'}</td>
                   <td><button className="btn btn-secondary btn-sm" aria-label={`Xem ${person.projects.length} dự án của ${person.respondent_name||person.respondent_phone}`} onClick={()=>setProjectPerson(person)}>{person.projects.length}</button></td>
                   <td>{formatDate(person.last_seen)}</td>
-                  <td><button className="btn btn-secondary btn-sm" onClick={() => setSelectedPerson(person)} aria-label={`Xem hồ sơ ${person.respondent_name || person.respondent_phone || ''}`}>Xem</button>{session?.user?.role==='admin'&&<button className="btn btn-secondary btn-sm" style={{marginLeft:8}} aria-label={`Sửa hồ sơ ${person.respondent_name || person.respondent_phone || ''}`} onClick={()=>setEditing(person)}>Chỉnh sửa</button>}</td>
+                  <td><div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'nowrap'}}><button className="btn btn-secondary btn-icon" title="Xem hồ sơ" onClick={() => setSelectedPerson(person)} aria-label={`Xem hồ sơ ${person.respondent_name || person.respondent_phone || ''}`}><Icon name="eye" /></button>{session?.user?.role==='admin'&&<button className="btn btn-secondary btn-icon" title="Chỉnh sửa hồ sơ" aria-label={`Sửa hồ sơ ${person.respondent_name || person.respondent_phone || ''}`} onClick={()=>setEditing(person)}><Icon name="edit" /></button>}</div></td>
                 </tr>
               ))}</tbody>
             </table>
