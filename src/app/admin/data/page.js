@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import Icon from '@/components/Icon';
 import {useSession} from 'next-auth/react';
+import ParticipantProjects from '@/components/ParticipantProjects';
 import ImportParticipants from '@/components/ImportParticipants';
 import EditParticipant from '@/components/EditParticipant';
 import Modal from '@/components/Modal';
@@ -19,6 +20,7 @@ export default function DataPage() {
   const { addToast } = useToast();
   const {data:session}=useSession();
   const [importing,setImporting]=useState(false);
+  const [projectPerson,setProjectPerson]=useState(null);
   const [editing,setEditing]=useState(null);
   const [searchInput, setSearchInput] = useState('');
   const [filters, setFilters] = useState({ search: '', project_id: '', inviter: '', page: 1 });
@@ -101,7 +103,7 @@ export default function DataPage() {
                   <td>{person.respondent_birth_year || '—'}</td>
                   <td>{person.respondent_occupation || '—'}</td>
                   <td>{person.respondent_inviter || '—'}</td>
-                  <td><div className="data-project-tags">{person.projects.map(project => <span className="badge badge-completed" key={project.id || project.name}>{project.name}</span>)}</div></td>
+                  <td><button className="btn btn-secondary btn-sm" aria-label={`Xem ${person.projects.length} dự án của ${person.respondent_name||person.respondent_phone}`} onClick={()=>setProjectPerson(person)}>{person.projects.length}</button></td>
                   <td>{formatDate(person.last_seen)}</td>
                   <td><button className="btn btn-secondary btn-sm" onClick={() => setSelectedPerson(person)} aria-label={`Xem hồ sơ ${person.respondent_name || person.respondent_phone || ''}`}>Xem</button>{session?.user?.role==='admin'&&<button className="btn btn-secondary btn-sm" style={{marginLeft:8}} aria-label={`Sửa hồ sơ ${person.respondent_name || person.respondent_phone || ''}`} onClick={()=>setEditing(person)}>Chỉnh sửa</button>}</td>
                 </tr>
@@ -118,6 +120,7 @@ export default function DataPage() {
         </div>
       )}
 
+      {projectPerson&&<ParticipantProjects key={projectPerson.id} person={projectPerson} onClose={()=>setProjectPerson(null)} onSaved={()=>{setSelectedPerson(null);refresh();addToast('Đã gỡ dự án khỏi lịch sử hồ sơ','success');}}/>}
       {importing&&<ImportParticipants onClose={()=>setImporting(false)} onSaved={result=>{refresh();addToast(`Đã nhập ${result.added} hồ sơ`,'success');}}/>}
       {editing&&<EditParticipant person={editing} onClose={()=>setEditing(null)} onSaved={()=>{setEditing(null);setSelectedPerson(null);refresh();addToast('Đã cập nhật hồ sơ','success');}}/>}
       <Modal isOpen={!!selectedPerson} onClose={() => setSelectedPerson(null)} title="Hồ sơ người tham gia" size="lg">

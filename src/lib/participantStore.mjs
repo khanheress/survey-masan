@@ -44,6 +44,8 @@ export async function initializeParticipantStore(db) {
   CREATE INDEX IF NOT EXISTS participant_history_project ON participant_history(project_id);
   CREATE INDEX IF NOT EXISTS participants_last_seen ON participants(last_seen);`);
   await db.transaction(async () => {
+  const historyColumns=new Set((await db.prepare('PRAGMA table_info(participant_history)').all()).map(c=>c.name));
+  if(!historyColumns.has('removed_from_profile'))await db.exec('ALTER TABLE participant_history ADD COLUMN removed_from_profile INTEGER NOT NULL DEFAULT 0');
   const columns=new Set((await db.prepare('PRAGMA table_info(participants)').all()).map(c=>c.name));
   if(!columns.has('profile_overrides_json'))await db.exec("ALTER TABLE participants ADD COLUMN profile_overrides_json TEXT NOT NULL DEFAULT '{}'");
     const oldResponses = await db.prepare(`SELECT r.*, p.name AS project_name, s.title AS survey_title
@@ -63,11 +65,11 @@ export async function listParticipants(db, { search = '', projectId = '', invite
     args.push(`%${escape(search.trim())}%`, `%${escape(normalizePhone(search) || search.trim())}%`);
   }
   if (projectId || inviter) {
-    const historyConditions = ['h.participant_id = p.id'];
+    const historyConditions = ['h.participant_id = p.id','h.removed_from_profile = 0'];
     if (projectId) {historyConditions.push('h.project_id = ?');args.push(projectId);}
     if (inviter && projectId) {historyConditions.push('h.inviter = ?');args.push(inviter);}
     if(projectId)conditions.push(`EXISTS (SELECT 1 FROM participant_history h WHERE ${historyConditions.join(' AND ')})`);
-    if(inviter&&!projectId){conditions.push("(json_extract(p.profile_json, '$.respondent_inviter') = ? OR EXISTS (SELECT 1 FROM participant_history h WHERE h.participant_id = p.id AND h.inviter = ?))");args.push(inviter,inviter);}
+    if(inviter&&!projectId){conditions.push("(json_extract(p.profile_json, '$.respondent_inviter') = ? OR EXISTS (SELECT 1 FROM participant_history h WHERE h.participant_id = p.id AND h.removed_from_profile = 0 AND h.inviter = ?))");args.push(inviter,inviter);}
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const total = (await db.prepare(`SELECT COUNT(*) AS total FROM participants p ${where}`).get(...args)).total;
@@ -76,12 +78,12 @@ export async function listParticipants(db, { search = '', projectId = '', invite
   const currentPage = Math.min(Math.max(1, Number.parseInt(page, 10) || 1), totalPages);
   const rows = await db.prepare(`SELECT p.* FROM participants p ${where} ORDER BY p.last_seen DESC, p.id ${exportAll ? '' : 'LIMIT ? OFFSET ?'}`).
   all(...args, ...(exportAll ? [] : [limit, (currentPage - 1) * limit]));
-  const historyQuery = db.prepare('SELECT * FROM participant_history WHERE participant_id = ? ORDER BY submitted_at DESC, response_id');
+  const historyQuery = db.prepare('SELECT * FROM participant_history WHERE participant_id = ? AND removed_from_profile = 0 ORDER BY submitted_at DESC, response_id');
   const participants = await Promise.all(rows.map(async (row) => {
     const history = await historyQuery.all(row.id);
-    const projects = [...new Map(history.map((item) => [item.project_id || item.project_name, { id: item.project_id, name: item.project_name }])).values()];
+    const projects = [...new Map(history.map((item) => [JSON.stringify([item.project_id||null,item.project_id?null:item.project_name]), { id: item.project_id, name: item.project_name }])).values()];
     return { id: row.id, ...JSON.parse(row.profile_json), first_seen: row.first_seen, last_seen: row.last_seen, projects, history };
   }));
-  const projects = await db.prepare('SELECT project_id AS id, MAX(project_name) AS name FROM participant_history WHERE project_id IS NOT NULL GROUP BY project_id ORDER BY name').all();
+  const projects = await db.prepare('SELECT project_id AS id, MAX(project_name) AS name FROM participant_history WHERE project_id IS NOT NULL AND removed_from_profile = 0 GROUP BY project_id ORDER BY name').all();
   return { participants, projects, pagination: { total, page: currentPage, limit, totalPages } };
 }
