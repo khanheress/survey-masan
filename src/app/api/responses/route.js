@@ -1,3 +1,4 @@
+import {isPhoneBlacklisted,BLOCKED_MESSAGE} from '@/lib/participantBlacklist.mjs';
 import { parseProjectRules, checkEligibility, projectQuotaCounts } from '@/lib/projectRules.mjs';
 import { pipeText } from '@/lib/surveyAdvanced.mjs';
 import { parseSurveyFields, validateSurveyAnswers } from '@/lib/surveyFlow.mjs';
@@ -83,6 +84,7 @@ export async function POST(request) {
     const db = await getDb();
 
     return await db.transaction(async () => {
+    if(await isPhoneBlacklisted(db,respondent_phone))return NextResponse.json({error:BLOCKED_MESSAGE,reason:'registration_blocked'},{status:403});
     // 1. Survey exists and is_published=1
     const survey = await db.prepare('SELECT * FROM surveys WHERE id = ?').get(survey_id);
     if (!survey) return NextResponse.json({ error: 'Không tìm thấy khảo sát' }, { status: 404 });

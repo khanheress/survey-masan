@@ -1,3 +1,4 @@
+import {isPhoneBlacklisted} from './participantBlacklist.mjs';
 import {RESPONDENT_FIELDS} from './respondent.mjs';
 import {normalizePhone} from './participantStore.mjs';
 export function validateProfileEdit(body) {
@@ -20,6 +21,7 @@ export async function editParticipant(db,id,values){
   const person=await db.prepare('SELECT * FROM participants WHERE id = ?').get(id);if(!person)return {status:404,error:'Không tìm thấy hồ sơ.'};
   const profile={...JSON.parse(person.profile_json),...values};
   const phone=normalizePhone(profile.respondent_phone||'');const newId=phone?`phone:${phone}`:id;
+  if(phone!==normalizePhone(person.phone||'')&&await isPhoneBlacklisted(db,person.phone||''))return {status:409,error:'Hãy bỏ blacklist trước khi thay đổi số điện thoại của hồ sơ.'};
   const conflict=await db.prepare('SELECT id FROM participants WHERE (id = ? OR phone = ?) AND id != ?').get(newId,phone||null,id);
   if(conflict)return {status:409,error:'Số điện thoại đã thuộc một hồ sơ khác. Vui lòng kiểm tra lại.'};
   const overrides={...JSON.parse(person.profile_overrides_json||'{}'),...values};

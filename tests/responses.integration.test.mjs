@@ -1,3 +1,4 @@
+import * as participantBlacklist from '../src/lib/participantBlacklist.mjs';
 import * as responseReview from '../src/lib/responseReview.mjs';
 import * as participantEditing from '../src/lib/participantEditing.mjs';
 import ExcelJS from 'exceljs';
@@ -40,6 +41,7 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     const imports = {
       'next/server': { NextResponse },
       'next-auth/next': { getServerSession: async () => signedIn ? { user: { role,id:'admin-test' } } : null },
+      '@/lib/participantBlacklist.mjs':participantBlacklist,
       '@/lib/authOptions': { authOptions: {} },
       '@/lib/db': { getDb: () => db },
       '@/lib/surveyFlow.mjs': surveyFlow,
@@ -79,6 +81,15 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n, 0);
     assert.equal((await route.POST(request(payload))).status, 201);
     assert.equal((await route.POST(request(payload))).status, 409);
+    const blacklistRoute=await loadRoute('../src/app/api/participants/[id]/blacklist/route.js');
+    const blacklistContext={params:Promise.resolve({id:'phone:0900000000'})};
+    signedIn=false;assert.equal((await blacklistRoute.PATCH(request({blacklisted:true}),blacklistContext)).status,401);
+    signedIn=true;role='moderator';assert.equal((await blacklistRoute.PATCH(request({blacklisted:true}),blacklistContext)).status,403);role='admin';
+    assert.equal((await blacklistRoute.PATCH(request({blacklisted:true}),blacklistContext)).status,200);
+    for(const phone of ['0900000000','+84 900000000','0084900000000'])assert.equal((await route.POST(request({...payload,respondent_phone:phone}))).status,403);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n,1);
+    assert.equal((await blacklistRoute.PATCH(request({blacklisted:false}),blacklistContext)).status,200);
+    assert.equal((await route.POST(request(payload))).status,409);
     const saved = await db.prepare('SELECT * FROM responses').get();
     for (const key of ['respondent_name', 'respondent_phone', 'respondent_address', 'respondent_occupation', 'respondent_marital_status', 'respondent_inviter']) assert.equal(saved[key], payload[key]);
     assert.equal(saved.respondent_birth_year, 1990);

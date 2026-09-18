@@ -26,9 +26,11 @@ export async function importProjectMembers(db,projectId,rows,{commit=false,revie
   const members=new Set((await db.prepare('SELECT participant_id FROM project_members WHERE project_id = ?').all(projectId)).map(p=>p.participant_id));
   const responses=await db.prepare('SELECT r.respondent_phone,h.participant_id FROM responses r LEFT JOIN participant_history h ON h.response_id=r.id WHERE r.project_id = ?').all(projectId);
   const responsePhones=new Set(responses.filter(r=>r.respondent_phone).map(r=>normalizePhone(r.respondent_phone)));responses.forEach(r=>{if(r.participant_id)members.add(r.participant_id);});
+  const blocked=new Set((await db.prepare('SELECT phone FROM participant_blacklist').all()).map(p=>p.phone));
   const seen=new Set(),result=[];let added=0;
   for(const row of rows){
    if(row.error){result.push({...row,status:'error'});continue;}
+   if(blocked.has(normalizePhone(row.phone))){result.push({...row,status:'error',error:'Số điện thoại đang trong blacklist. Cần bỏ chặn trước khi thêm vào dự án.'});continue;}
    const existing=byPhone.get(row.phone),id=existing?.id||`phone:${row.phone}`;
    if(seen.has(row.phone)||members.has(id)||responsePhones.has(row.phone)){result.push({...row,status:'skip',message:'Đã có trong dự án hoặc trùng trong file; giữ nguyên trạng thái hiện có.'});continue;}
    seen.add(row.phone);

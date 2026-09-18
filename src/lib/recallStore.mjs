@@ -1,3 +1,4 @@
+import {initializeBlacklistStore,isPhoneBlacklisted,BLOCKED_MESSAGE} from './participantBlacklist.mjs';
 import {resolveRecallSchedule} from './recallSchedule.mjs';
 import { randomUUID } from 'node:crypto';
 import { normalizePhone } from './participantStore.mjs';
@@ -7,6 +8,7 @@ export class RecallError extends Error {
 }
 
 export async function initializeRecallStore(db) {
+  await initializeBlacklistStore(db);
   await db.exec(`CREATE TABLE IF NOT EXISTS recall_forms (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
     share_token TEXT UNIQUE NOT NULL, allow_overlap INTEGER NOT NULL DEFAULT 0,
@@ -111,6 +113,7 @@ export async function bookRecall(db, token, input, now = new Date()) {
   if (typeof input.starts_at !== 'string') throw new RecallError('Vui lòng chọn ngày và giờ đăng ký.');
   // Lock before reading capacity: two simultaneous requests cannot reserve the same exclusive slot.
   return await db.transaction(async () => {
+    if(await isPhoneBlacklisted(db,phone))throw new RecallError(BLOCKED_MESSAGE,403);
     const form = await db.prepare('SELECT * FROM recall_forms WHERE share_token = ?').get(token);
     if (!form) throw new RecallError('Link Form Recall không tồn tại.', 404);
     if (!form.is_open) throw new RecallError('Form Recall hiện đã đóng đăng ký.', 410);

@@ -1,4 +1,5 @@
 'use client';
+import ParticipantBlacklist from '@/components/ParticipantBlacklist';
 import dynamic from 'next/dynamic';
 
 import { useCallback, useState } from 'react';
@@ -100,7 +101,7 @@ export default function DataPage() {
               <thead><tr><th>Tên</th><th>Số điện thoại</th><th>Năm sinh</th><th>Nghề nghiệp</th><th>Người mời gần nhất</th><th>Dự án đã tham gia</th><th>Gần nhất</th><th>Thao tác</th></tr></thead>
               <tbody>{data.participants.map(person => (
                 <tr key={person.id}>
-                  <td><strong>{person.respondent_name || 'Chưa có tên'}</strong></td>
+                  <td><strong>{person.respondent_name || 'Chưa có tên'}</strong>{person.blacklisted&&<span className="badge" style={{marginLeft:8,color:'var(--danger)'}}>Blacklist</span>}</td>
                   <td style={{whiteSpace:'nowrap'}}>{person.respondent_phone || 'Chưa có số điện thoại'}</td>
                   <td>{person.respondent_birth_year || '—'}</td>
                   <td>{person.respondent_occupation || '—'}</td>
@@ -127,7 +128,7 @@ export default function DataPage() {
       {editing&&<EditParticipant person={editing} onClose={()=>setEditing(null)} onSaved={()=>{setEditing(null);setSelectedPerson(null);refresh();addToast('Đã cập nhật hồ sơ','success');}}/>}
       <Modal isOpen={!!selectedPerson} onClose={() => setSelectedPerson(null)} title="Hồ sơ người tham gia" size="lg">
         {selectedPerson && <>
-          <RespondentDetails response={{ ...selectedPerson, created_at: selectedPerson.last_seen }} />
+          <RespondentDetails response={{ ...selectedPerson, created_at: selectedPerson.last_seen }} /><ParticipantBlacklist key={selectedPerson.id} person={selectedPerson} onSaved={blacklisted=>{setSelectedPerson(previous=>previous?.id===selectedPerson.id?{...previous,blacklisted}:previous);refresh();addToast(blacklisted?'Đã chặn đăng ký mới':'Đã bỏ blacklist','success');}}/>
           <h3 style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>Lịch sử tham gia · {selectedPerson.history.length} lần</h3>
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table"><thead><tr><th>Dự án</th><th>Khảo sát</th><th>Người mời</th><th>Ngày gửi</th></tr></thead>
