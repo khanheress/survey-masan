@@ -28,6 +28,7 @@ export async function initializeRecallStore(db) {
     const columns=new Set((await db.prepare('PRAGMA table_info(recall_forms)').all()).map(c=>c.name));
     if(!columns.has('schedule_json'))await db.exec('ALTER TABLE recall_forms ADD COLUMN schedule_json TEXT');
     if(!columns.has('project_id'))await db.exec('ALTER TABLE recall_forms ADD COLUMN project_id TEXT');
+    if(!columns.has('capacity_per_slot')){await db.exec('ALTER TABLE recall_forms ADD COLUMN capacity_per_slot INTEGER');await db.exec('UPDATE recall_forms SET capacity_per_slot = 1 WHERE allow_overlap = 0');}
     await db.exec('CREATE INDEX IF NOT EXISTS recall_forms_project ON recall_forms(project_id)');
   })();
 }
@@ -37,7 +38,13 @@ function validateForm(input) {
   const description = typeof input.description === 'string' ? input.description.trim() : '';
   if (!title || title.length > 200) throw new RecallError('Tên form phải có từ 1 đến 200 ký tự.');
   if (description.length > 5000) throw new RecallError('Mô tả tối đa 5.000 ký tự.');
-  if (typeof input.allow_overlap !== 'boolean' || typeof input.is_open !== 'boolean') throw new RecallError('Cài đặt form không hợp lệ.');
+  if (typeof input.is_open !== 'boolean') throw new RecallError('Cài đặt form không hợp lệ.');
+  let capacity = input.capacity_per_slot;
+  if (!Object.hasOwn(input, 'capacity_per_slot')) {
+    if (typeof input.allow_overlap !== 'boolean') throw new RecallError('Cài đặt form không hợp lệ.');
+    capacity = input.allow_overlap ? null : 1;
+  }
+  if (capacity !== null && (!Number.isInteger(capacity) || capacity < 1 || capacity > 10000)) throw new RecallError('Số người mỗi khung giờ phải là số nguyên từ 1 đến 10.000 hoặc để trống.');
   if (!Array.isArray(input.slots) || input.slots.length === 0 || input.slots.length > 500) throw new RecallError('Vui lòng nhập từ 1 đến 500 khung giờ.');
   const slots = input.slots.map((slot) => {
     if (typeof slot !== 'string' || !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d$/.test(slot)) throw new RecallError('Ngày hoặc giờ đăng ký không hợp lệ.');
@@ -46,7 +53,7 @@ function validateForm(input) {
     return slot;
   });
   if (new Set(slots).size !== slots.length) throw new RecallError('Có khung giờ bị nhập trùng. Vui lòng kiểm tra lại.');
-  return { title, description, slots: slots.sort(), allow_overlap: Number(input.allow_overlap), is_open: Number(input.is_open) };
+  return { title, description, slots: slots.sort(), capacity_per_slot: capacity, allow_overlap: Number(capacity === null || capacity > 1), is_open: Number(input.is_open) };
 }
 
 export function canManageRecall(form, user) {return user?.role === 'admin' || form.created_by === user?.id;}
@@ -77,14 +84,14 @@ export async function saveRecallForm(db, input, user, id = null) {
       if (!canManageRecall(existing, user)) throw new RecallError('Bạn không có quyền sửa form này.', 403);
       const bookedSlots = existing.slots.filter((slot) => slot.booked_count > 0);
       if (bookedSlots.some((slot) => !settings.slots.includes(slot.starts_at))) throw new RecallError('Không thể xóa hoặc đổi giờ đã có người đăng ký.', 409);
-      if (!settings.allow_overlap && bookedSlots.some((slot) => slot.booked_count > 1)) throw new RecallError('Form đã có nhiều người cùng giờ; chưa thể đổi sang mỗi giờ một người.', 409);
-      await db.prepare('UPDATE recall_forms SET title = ?, description = ?, allow_overlap = ?, is_open = ?, project_id = ?, schedule_json = ? WHERE id = ?').
-      run(settings.title, settings.description, settings.allow_overlap, settings.is_open, projectId||null, scheduleJson, id);
+      if (settings.capacity_per_slot !== null && bookedSlots.some((slot) => slot.booked_count > settings.capacity_per_slot)) throw new RecallError('Số người tối đa không thể thấp hơn số đăng ký hiện có trong một khung giờ.', 409);
+      await db.prepare('UPDATE recall_forms SET title = ?, description = ?, allow_overlap = ?, capacity_per_slot = ?, is_open = ?, project_id = ?, schedule_json = ? WHERE id = ?').
+      run(settings.title, settings.description, settings.allow_overlap, settings.capacity_per_slot, settings.is_open, projectId||null, scheduleJson, id);
       await db.prepare('DELETE FROM recall_slots WHERE form_id = ?').run(id);
     } else {
       id = randomUUID();
-      await db.prepare('INSERT INTO recall_forms (id, title, description, share_token, allow_overlap, is_open, created_by, project_id, schedule_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').
-      run(id, settings.title, settings.description, randomUUID(), settings.allow_overlap, settings.is_open, user.id, projectId, scheduleJson);
+      await db.prepare('INSERT INTO recall_forms (id, title, description, share_token, allow_overlap, capacity_per_slot, is_open, created_by, project_id, schedule_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').
+      run(id, settings.title, settings.description, randomUUID(), settings.allow_overlap, settings.capacity_per_slot, settings.is_open, user.id, projectId, scheduleJson);
     }
     const insert = db.prepare('INSERT INTO recall_slots (form_id, starts_at) VALUES (?, ?)');
     for (const slot of settings.slots) await insert.run(id, slot);
@@ -98,9 +105,9 @@ export async function publicRecallForm(db, token, now = new Date()) {
   const form = await getRecallForm(db, found.id);
   if (!form.is_open) throw new RecallError('Form Recall hiện đã đóng đăng ký.', 410);
   return {
-    title: form.title, project_name: form.project_name, description: form.description, allow_overlap: Boolean(form.allow_overlap),
-    slots: form.slots.map((slot) => ({ starts_at: slot.starts_at,
-      available: new Date(`${slot.starts_at}:00+07:00`) > now && (Boolean(form.allow_overlap) || slot.booked_count === 0)
+    title: form.title, project_name: form.project_name, description: form.description, allow_overlap: Boolean(form.allow_overlap), capacity_per_slot: form.capacity_per_slot,
+    slots: form.slots.map((slot) => ({ starts_at: slot.starts_at, booked_count: slot.booked_count, remaining: form.capacity_per_slot === null ? null : Math.max(0, form.capacity_per_slot - slot.booked_count),
+      available: new Date(`${slot.starts_at}:00+07:00`) > now && (form.capacity_per_slot === null || slot.booked_count < form.capacity_per_slot)
     }))
   };
 }
@@ -123,8 +130,9 @@ export async function bookRecall(db, token, input, now = new Date()) {
     if (await db.prepare('SELECT 1 FROM recall_bookings WHERE form_id = ? AND starts_at = ? AND phone = ?').get(form.id, slot.starts_at, phone)) {
       throw new RecallError('Số điện thoại này đã đăng ký khung giờ đã chọn.', 409);
     }
-    if (!form.allow_overlap && (await db.prepare('SELECT 1 FROM recall_bookings WHERE form_id = ? AND starts_at = ?').get(form.id, slot.starts_at))) {
-      throw new RecallError('Khung giờ vừa có người đăng ký. Vui lòng chọn giờ khác.', 409);
+    const bookingCount = await db.prepare('SELECT COUNT(*) AS count FROM recall_bookings WHERE form_id = ? AND starts_at = ?').get(form.id, slot.starts_at);
+    if (form.capacity_per_slot !== null && bookingCount.count >= form.capacity_per_slot) {
+      throw new RecallError('Khung giờ vừa hết chỗ. Vui lòng chọn giờ khác.', 409);
     }
     await db.prepare('INSERT INTO recall_bookings (id, form_id, starts_at, name, phone) VALUES (?, ?, ?, ?, ?)').
     run(randomUUID(), form.id, slot.starts_at, name, phone);

@@ -12,7 +12,7 @@ export default function RecallEditor({ initialForm, onSaved, onClose, projectId,
   const {data:projects}=useRemoteData(loadProjects,[],'Không thể tải danh sách dự án.',projectId==='unassigned');
   const [title, setTitle] = useState(initialForm?.title || '');
   const [description, setDescription] = useState(initialForm?.description || '');
-  const [allowOverlap, setAllowOverlap] = useState(Boolean(initialForm?.allow_overlap));
+  const [capacity, setCapacity] = useState(initialForm?.capacity_per_slot == null ? (initialForm?.allow_overlap ? '' : '1') : String(initialForm.capacity_per_slot));
   const [isOpen, setIsOpen] = useState(initialForm ? Boolean(initialForm.is_open) : true);
   const [slots, setSlots] = useState(initialForm?.slots.map(slot => ({
     key: slot.starts_at, date: slot.starts_at.slice(0,10), time: slot.starts_at.slice(11), booked: slot.booked_count,
@@ -29,12 +29,13 @@ export default function RecallEditor({ initialForm, onSaved, onClose, projectId,
   const save = async event => {
     event.preventDefault();
     if(mode==='quick'&&scheduleError){setError(scheduleError);return;}
+    if(capacity!==''&&(!/^\d+$/.test(capacity)||Number(capacity)<1||Number(capacity)>10000)){setError('Số người mỗi khung giờ phải là số nguyên từ 1 đến 10.000 hoặc để trống.');return;}
     setSaving(true);
     setError('');
     try {
       const response = await fetch(initialForm ? `/api/recall/${initialForm.id}` : '/api/recall', {
         method: initialForm ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id:selectedProject, title, description, allow_overlap: allowOverlap, is_open: isOpen, schedule:mode==='quick'?schedule:null, slots:mode==='quick'?generated.slots:slots.map(slot => `${slot.date}T${slot.time}`) }),
+        body: JSON.stringify({ project_id:selectedProject, title, description, capacity_per_slot: capacity === '' ? null : Number(capacity), is_open: isOpen, schedule:mode==='quick'?schedule:null, slots:mode==='quick'?generated.slots:slots.map(slot => `${slot.date}T${slot.time}`) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Không thể lưu form.');
@@ -51,10 +52,9 @@ export default function RecallEditor({ initialForm, onSaved, onClose, projectId,
         {projectId==='unassigned'?<label className="form-label">Gắn vào dự án<select aria-label="Gắn vào dự án" className="form-select" required value={selectedProject} onChange={e=>setSelectedProject(e.target.value)}><option value="">Chọn dự án</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>:<p style={{marginBottom:16}}>Dự án: <strong>{projectName}</strong></p>}
         <div className="form-group"><label className="form-label" htmlFor="recall-title">Tên form *</label><input id="recall-title" className="form-input" required maxLength={200} value={title} onChange={event => setTitle(event.target.value)} placeholder="Ví dụ: Đăng ký lịch phỏng vấn" /></div>
         <div className="form-group"><label className="form-label" htmlFor="recall-description">Mô tả / hướng dẫn</label><textarea id="recall-description" className="form-textarea" maxLength={5000} value={description} onChange={event => setDescription(event.target.value)} placeholder="Địa điểm, hướng dẫn hoặc thông tin cần lưu ý…" /></div>
-        <div className="form-group"><label className="form-label" htmlFor="recall-mode">Số người trong một khung giờ</label>
-          <select id="recall-mode" className="form-select" value={allowOverlap ? 'shared' : 'single'} onChange={event => setAllowOverlap(event.target.value === 'shared')}>
-            <option value="single">Mỗi khung giờ chỉ nhận một người</option><option value="shared">Cho phép nhiều người cùng khung giờ</option>
-          </select>
+        <div className="form-group"><label className="form-label" htmlFor="recall-capacity">Số người tối đa trong một khung giờ</label>
+          <input id="recall-capacity" className="form-input" type="number" min="1" max="10000" step="1" value={capacity} onChange={event => setCapacity(event.target.value)} placeholder="Không giới hạn" />
+          <p className="form-hint">Nhập số lượng cụ thể. Để trống nếu không giới hạn.</p>
         </div>
         <div className="recall-section-title"><h3>Ngày và giờ đăng ký</h3><span>Giờ Việt Nam (UTC+7)</span></div>
         <div className="form-group"><label className="form-label">Cách tạo lịch<select aria-label="Cách tạo lịch" className="form-select" value={mode} onChange={e=>changeMode(e.target.value)}><option value="quick">Tạo nhanh theo ngày và khoảng giờ</option><option value="manual">Nhập từng khung giờ</option></select></label></div>

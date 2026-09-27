@@ -30,7 +30,7 @@ export default function RecallManager({projectId,projectName}) {
         <div className="flex-between"><span className={`badge ${form.is_open ? 'badge-active' : 'badge-inactive'}`}>{form.is_open ? 'Đang mở đăng ký' : 'Đã đóng đăng ký'}</span><Icon name="calendar" /></div>
         <h2>{form.title}</h2><p className="data-description">{form.description || 'Chưa có mô tả'}</p>
         <div className="recall-metrics"><span>{form.slots.length} khung giờ</span><span>{form.booking_count} đăng ký</span></div>
-        <p className="form-hint">{form.allow_overlap ? 'Cho phép nhiều người cùng khung giờ' : 'Mỗi khung giờ chỉ nhận một người'}</p>
+        <p className="form-hint">{form.capacity_per_slot == null ? 'Không giới hạn số người mỗi khung giờ' : `Tối đa ${form.capacity_per_slot} người mỗi khung giờ`}</p>
         <div className="recall-card-actions"><button className="btn btn-primary btn-sm" onClick={() => copyLink(form)}><Icon name="link" /> Sao chép link</button><a className="btn btn-secondary btn-sm" href={`/recall/${form.share_token}`} target="_blank" rel="noreferrer">Mở form</a><button className="btn btn-secondary btn-sm" onClick={() => setEditor(form)}>Chỉnh sửa</button><button className="btn btn-ghost btn-sm" onClick={() => setBookingForm(form)}>Xem đăng ký ({form.booking_count})</button></div>
       </article>)}
     </div>}
