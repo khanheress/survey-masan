@@ -1,4 +1,5 @@
 export function loginErrorMessage(result) {
+  if (result?.error === 'AUTH_ADMIN_REQUIRED') return 'Chỉ tài khoản quản trị viên (admin) được phép đăng nhập.';
   if (result?.ok && !result.error) return null;
   if (result?.error === 'CredentialsSignin') return 'Tên đăng nhập hoặc mật khẩu không đúng.';
   if (result?.error === 'AUTH_DATABASE_UNAVAILABLE') return 'Không thể kết nối dữ liệu tài khoản. Vui lòng liên hệ quản trị viên kiểm tra cấu hình cơ sở dữ liệu trên hosting.';

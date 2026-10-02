@@ -29,9 +29,18 @@ Dữ liệu cũ trên máy chưa tự chuyển sang database mới. Nếu cần 
 ## Kiểm tra kết quả
 
 - Sai mật khẩu thật sự: trang báo “Tên đăng nhập hoặc mật khẩu không đúng”.
+- Đúng mật khẩu nhưng tài khoản không có quyền `admin`: từ chối đăng nhập quản trị.
+- Phiên admin được lưu bằng cookie trong 30 ngày và gia hạn khi sử dụng. Mở lại `/` hoặc `/login` khi phiên còn hợp lệ sẽ chuyển đến `/admin`; đăng xuất sẽ kết thúc phiên. Cần dùng cùng trình duyệt và tên miền, đồng thời giữ nguyên `NEXTAUTH_SECRET` qua các lần triển khai.
+- Quyền admin được đối chiếu lại với database khi đọc phiên; tài khoản bị xóa hoặc gỡ quyền sẽ mất quyền truy cập dù cookie chưa hết hạn.
 - Thiếu/sai database: trang báo không kết nối được dữ liệu tài khoản.
 - Thiếu cấu hình phiên đăng nhập: kiểm tra `NEXTAUTH_SECRET` và `NEXTAUTH_URL`.
 - Sau khi đăng nhập, tạo thử dự án và một đăng ký Recall để xác nhận việc lưu dữ liệu.
+
+## Chuẩn hóa điện thoại và phân trang phản hồi
+
+Khi khởi tạo database, ứng dụng tự bổ sung cột điện thoại chuẩn hóa cho phản hồi cũ, giữ nguyên số điện thoại gốc và các phản hồi đã lưu. Việc chống gửi trùng dùng chung quy tắc với Quản lý data: bỏ khoảng trắng, dấu chấm, ngoặc, gạch nối và chuyển đầu `+84` hoặc `0084` hợp lệ thành `0`. Các cách viết tương đương bị chặn trong cùng một khảo sát, kể cả khi gửi đồng thời.
+
+Tab Phản hồi trong chi tiết dự án tải 10 bản ghi mỗi trang, có nút Trước/Sau và tổng số phản hồi. Xuất CSV vẫn xuất toàn bộ kết quả của dự án.
 
 ## Tài liệu chính thức
 

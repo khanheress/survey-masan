@@ -24,6 +24,10 @@ import { useToast } from '@/components/Toast';
 
 export default function ProjectDetailPage({ params }) {
   const { id } = React.use(params);
+  return <ProjectDetail key={id} id={id} />;
+}
+
+function ProjectDetail({ id }) {
   const router = useRouter();
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState('surveys');
@@ -32,20 +36,32 @@ export default function ProjectDetailPage({ params }) {
   const [surveyForm, setSurveyForm] = useState({ title: '', description: '' });
   const [formLoading, setFormLoading] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState(null);
+  const [responsePage, setResponsePage] = useState(1);
 
   const loadProjectData = useCallback(async (signal) => {
     const results = await Promise.all([
       fetch(`/api/projects/${id}`, { signal }),
       fetch(`/api/surveys?project_id=${id}`, { signal }),
-      fetch(`/api/responses?project_id=${id}`, { signal }),
     ]);
     if (results.some(res => !res.ok)) throw new Error('Failed to load project data');
-    const [project, surveys, responseData] = await Promise.all(results.map(res => res.json()));
-    return { project, surveys, responses: responseData.responses || [] };
+    const [project, surveys] = await Promise.all(results.map(res => res.json()));
+    return { project, surveys };
   }, [id]);
-  const { data: { project, surveys, responses }, loading, refresh: fetchProjectData } = useRemoteData(
-    loadProjectData, { project: null, surveys: [], responses: [] }, 'Lỗi khi tải dữ liệu'
+  const { data: { project, surveys }, loading, refresh: fetchProjectData } = useRemoteData(
+    loadProjectData, { project: null, surveys: [] }, 'Lỗi khi tải dữ liệu'
   );
+
+  const loadResponses = useCallback(async signal => {
+    const query = new URLSearchParams({ project_id: id, page: String(responsePage), limit: '10' });
+    const res = await fetch(`/api/responses?${query}`, { signal });
+    if (!res.ok) throw new Error('Không thể tải phản hồi.');
+    return res.json();
+  }, [id, responsePage]);
+  const { data: responseData, loading: responsesLoading, error: responsesError, refresh: refreshResponses } = useRemoteData(
+    loadResponses, { responses: [], pagination: { total: 0, page: 1, totalPages: 1 } },
+    'Không thể tải phản hồi.', activeTab === 'responses'
+  );
+  const { responses, pagination } = responseData;
 
   const handleCreateSurvey = async (e) => {
     e.preventDefault();
@@ -179,7 +195,7 @@ export default function ProjectDetailPage({ params }) {
           }}
           onClick={() => setActiveTab('responses')}
         >
-          <Icon name="download" /> Phản hồi ({responses.length})
+          <Icon name="download" /> Phản hồi ({activeTab === 'responses' && !responsesLoading && !responsesError ? pagination.total : project.response_count || 0})
         </button>
       </div>
 
@@ -251,12 +267,14 @@ export default function ProjectDetailPage({ params }) {
         <div>
           <div className="flex-between" style={{ marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Danh sách Phản hồi</h2>
-            <button className="btn btn-secondary" onClick={exportCSV} disabled={responses.length === 0}>
+            <button className="btn btn-secondary" onClick={exportCSV} disabled={responsesLoading || responsesError || pagination.total === 0}>
               <Icon name="download" /> Xuất CSV
             </button>
           </div>
           
-          {responses.length === 0 ? (
+          {responsesLoading ? <p role="status">Đang tải phản hồi…</p> : responsesError ? (
+            <div className="card"><p role="alert">Không thể tải phản hồi.</p><button className="btn btn-secondary" onClick={refreshResponses}>Thử lại</button></div>
+          ) : responses.length === 0 ? (
             <div className="empty-state glass-card">
               <div style={{ fontSize: '3rem', marginBottom: '1rem' }}><Icon name="download" /></div>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>Chưa có phản hồi</h3>
@@ -288,6 +306,13 @@ export default function ProjectDetailPage({ params }) {
                   </tbody>
                 </table>
               </div>
+              <nav className="data-pagination" aria-label="Phân trang phản hồi dự án">
+                <span aria-live="polite">{pagination.total} phản hồi · Trang {pagination.page} / {pagination.totalPages}</span>
+                <div className="flex gap-2">
+                  <button className="btn btn-secondary btn-sm" disabled={pagination.page <= 1} onClick={() => setResponsePage(pagination.page - 1)}>Trước</button>
+                  <button className="btn btn-secondary btn-sm" disabled={pagination.page >= pagination.totalPages} onClick={() => setResponsePage(pagination.page + 1)}>Sau</button>
+                </div>
+              </nav>
             </div>
           )}
         </div>

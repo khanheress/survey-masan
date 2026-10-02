@@ -1,10 +1,7 @@
 import {initializeBlacklistStore} from './participantBlacklist.mjs';
 import { RESPONDENT_FIELDS } from './respondent.mjs';
-
-export function normalizePhone(value = '') {
-  const phone = String(value).trim().replace(/[\s().-]/g, '');
-  return /^(?:\+84|0084)\d{9}$/.test(phone) ? `0${phone.replace(/^(?:\+84|0084)/, '')}` : phone;
-}
+import { normalizePhone } from './phone.mjs';
+export { normalizePhone } from './phone.mjs';
 
 export async function recordParticipant(db, response) {
   // One durable participation per submitted response. Re-importing cannot overwrite newer data.

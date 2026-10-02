@@ -1,5 +1,8 @@
+import { normalizePhone } from './phone.mjs';
+
 export async function migrateResponseProfile(db) {
   const additions = {
+    respondent_phone_normalized: 'TEXT',
     review_status: "TEXT NOT NULL DEFAULT 'pending'",
     reviewed_at: 'TEXT',
     reviewed_by: 'TEXT',
@@ -17,6 +20,20 @@ export async function migrateResponseProfile(db) {
   const columns = new Set((await db.prepare('PRAGMA table_info(responses)').all()).map((column) => column.name));
     for (const [name, type] of Object.entries(additions)) {
       if (!columns.has(name)) await db.exec(`ALTER TABLE responses ADD COLUMN ${name} ${type}`);
+    }
+    // Preserve historical phone text, including any existing duplicate responses.
+    if (columns.has('respondent_phone')) {
+      let rows;
+      do {
+        rows = await db.prepare('SELECT id, respondent_phone FROM responses WHERE respondent_phone_normalized IS NULL LIMIT 500').all();
+        for (const row of rows) {
+          await db.prepare('UPDATE responses SET respondent_phone_normalized = ? WHERE id = ?')
+            .run(normalizePhone(row.respondent_phone || ''), row.id);
+        }
+      } while (rows.length === 500);
+    }
+    if (columns.has('survey_id')) {
+      await db.exec('CREATE INDEX IF NOT EXISTS responses_survey_normalized_phone ON responses(survey_id, respondent_phone_normalized)');
     }
   })();
 }

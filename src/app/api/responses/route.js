@@ -10,6 +10,7 @@ import { getSurveyAvailability } from '@/lib/surveyAvailability.mjs';
 import { v4 as uuidv4 } from 'uuid';
 import { recordParticipant } from '@/lib/participantStore.mjs';
 import { validateRespondent } from '@/lib/respondent.mjs';
+import { normalizePhone } from '@/lib/phone.mjs';
 
 export async function GET(request) {
   try {
@@ -22,9 +23,8 @@ export async function GET(request) {
     const reviewStatus=searchParams.get('review_status');
     const inviter=searchParams.get('inviter');
     const sort=searchParams.get('sort');
-    const page = parseInt(searchParams.get('page')) || 1;
-    const limit = parseInt(searchParams.get('limit')) || 10;
-    const offset = (page - 1) * limit;
+    const requestedPage = Math.max(1, parseInt(searchParams.get('page')) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit')) || 10));
 
     const db = await getDb();
     let query = `
@@ -45,8 +45,11 @@ export async function GET(request) {
     const countQuery = `SELECT COUNT(*) as total FROM (${query})`;
     const totalResult = await db.prepare(countQuery).get(...params);
     const total = totalResult.total;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(requestedPage, totalPages);
+    const offset = (page - 1) * limit;
 
-    query += sort==='inviter_asc'?" ORDER BY COALESCE(r.respondent_inviter, '') ASC, r.created_at DESC LIMIT ? OFFSET ?":sort==='inviter_desc'?" ORDER BY COALESCE(r.respondent_inviter, '') DESC, r.created_at DESC LIMIT ? OFFSET ?":' ORDER BY r.created_at DESC LIMIT ? OFFSET ?';
+    query += sort==='inviter_asc'?" ORDER BY COALESCE(r.respondent_inviter, '') ASC, r.created_at DESC, r.id DESC LIMIT ? OFFSET ?":sort==='inviter_desc'?" ORDER BY COALESCE(r.respondent_inviter, '') DESC, r.created_at DESC, r.id DESC LIMIT ? OFFSET ?":' ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
     const responses = (await db.prepare(query).all(...params)).map((row) => {
@@ -63,7 +66,7 @@ export async function GET(request) {
     return NextResponse.json({
       data: responses,
       responses,
-      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) }
+      pagination: { total, page, limit, totalPages }
     }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -76,6 +79,8 @@ export async function POST(request) {
     const { survey_id, respondent_email } = body;
     const profile = validateRespondent(body);
     if (profile.error) return NextResponse.json({ error: profile.error }, { status: 400 });
+    profile.values.respondent_phone = normalizePhone(profile.values.respondent_phone);
+    if (!/^\+?\d{8,15}$/.test(profile.values.respondent_phone)) return NextResponse.json({ error: 'Vui lòng nhập số điện thoại hợp lệ.' }, { status: 400 });
     const { respondent_name, respondent_phone, respondent_birth_year, respondent_address, respondent_occupation, respondent_marital_status, respondent_inviter } = profile.values;
     const data = body.answers_json ?? body.data ?? {};
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -108,7 +113,7 @@ export async function POST(request) {
 
     // 5. Check phone not already used for this survey
     if (respondent_phone) {
-      const existing = await db.prepare('SELECT * FROM responses WHERE survey_id = ? AND respondent_phone = ?').get(survey_id, respondent_phone);
+      const existing = await db.prepare('SELECT 1 FROM responses WHERE survey_id = ? AND respondent_phone_normalized = ?').get(survey_id, respondent_phone);
       if (existing) {
         return NextResponse.json({ error: 'Số điện thoại này đã tham gia khảo sát' }, { status: 409 });
       }
@@ -123,6 +128,7 @@ export async function POST(request) {
     const insert = db.prepare('INSERT INTO responses (id, survey_id, project_id, respondent_phone, respondent_name, respondent_email, respondent_birth_year, respondent_address, respondent_occupation, respondent_marital_status, respondent_inviter, data_json, respondent_gender, respondent_age, respondent_bumo, question_labels_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     await db.transaction(async () => {
       await insert.run(id, survey_id, project.id, respondent_phone || null, respondent_name || null, respondent_email || null, respondent_birth_year, respondent_address, respondent_occupation, respondent_marital_status, respondent_inviter, JSON.stringify(checked.answers), profile.values.respondent_gender, eligibility.age, JSON.stringify(eligibility.bumo), JSON.stringify(labels));
+      await db.prepare('UPDATE responses SET respondent_phone_normalized = ? WHERE id = ?').run(respondent_phone, id);
       const saved = await db.prepare('SELECT * FROM responses WHERE id = ?').get(id);
       await recordParticipant(db, { ...saved, project_name: project.name, survey_title: survey.title });
     })();

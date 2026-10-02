@@ -1,4 +1,5 @@
 import * as participantBlacklist from '../src/lib/participantBlacklist.mjs';
+import * as phone from '../src/lib/phone.mjs';
 import * as responseReview from '../src/lib/responseReview.mjs';
 import * as participantEditing from '../src/lib/participantEditing.mjs';
 import ExcelJS from 'exceljs';
@@ -42,6 +43,7 @@ test('submission, listing and CSV retain all profile fields and answers', async 
       'next/server': { NextResponse },
       'next-auth/next': { getServerSession: async () => signedIn ? { user: { role,id:'admin-test' } } : null },
       '@/lib/participantBlacklist.mjs':participantBlacklist,
+      '@/lib/phone.mjs': phone,
       '@/lib/authOptions': { authOptions: {} },
       '@/lib/db': { getDb: () => db },
       '@/lib/surveyFlow.mjs': surveyFlow,
@@ -81,6 +83,10 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n, 0);
     assert.equal((await route.POST(request(payload))).status, 201);
     assert.equal((await route.POST(request(payload))).status, 409);
+    for (const alias of ['+84 900 000 000', '0084900000000', '(090) 000-0000']) {
+      assert.equal((await route.POST(request({ ...payload, respondent_phone: alias }))).status, 409);
+    }
+    assert.equal((await route.POST(request({ ...payload, respondent_phone: 'not-a-phone' }))).status, 400);
     const blacklistRoute=await loadRoute('../src/app/api/participants/[id]/blacklist/route.js');
     const blacklistContext={params:Promise.resolve({id:'phone:0900000000'})};
     signedIn=false;assert.equal((await blacklistRoute.PATCH(request({blacklisted:true}),blacklistContext)).status,401);
@@ -119,6 +125,15 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     assert.equal(rows[0]['Địa chỉ'], payload.respondent_address);
     assert.equal(rows[0]['Nghề nghiệp hiện tại'], payload.respondent_occupation);
     assert.equal(rows[0]['Tình trạng hôn nhân'], payload.respondent_marital_status);
+    // Historical aliases also block normalized submissions, without rewriting the original.
+    await db.prepare('UPDATE responses SET respondent_phone = ?, respondent_phone_normalized = NULL WHERE id = ?').run('+84 900 000 000', saved.id);
+    await migrateResponseProfile(db);
+    assert.equal((await route.POST(request(payload))).status, 409);
+    assert.equal((await db.prepare('SELECT respondent_phone FROM responses WHERE id = ?').get(saved.id)).respondent_phone, '+84 900 000 000');
+    const competing = await Promise.all(['0909999999', '+84 909 999 999'].map(alias => route.POST(request({ ...payload, respondent_phone: alias }))));
+    assert.deepEqual(competing.map(result => result.status).sort(), [201, 409]);
+    const canonical = await db.prepare('SELECT respondent_phone FROM responses WHERE respondent_phone_normalized = ?').get('0909999999');
+    assert.equal(canonical.respondent_phone, '0909999999');
     // The server independently enforces branches; hidden answers never enter storage.
     const definition = [
       {id:'gate',type:'multiple_choice',label:'Điều kiện',options:['Có','Không'],rules:[{value:'Không',target:'screenout'},{value:'Có',target:'shown'}]},
@@ -218,6 +233,23 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     for(let i=0;i<12;i++)await db.prepare('INSERT INTO responses (id,project_id,survey_id,respondent_name,respondent_inviter,data_json,created_at) VALUES (?,?,?,?,?,?,?)').run('extra'+i,'p','s','Người '+i,'Khánh','{"why":"=1+1"}','2026-08-31 17:00:00');
     const xlsx=await loadRoute('../src/app/api/projects/[id]/export/route.js'),projectContext={params:Promise.resolve({id:'p'})};
     const metadata=await(await xlsx.GET(new Request('http://localhost/export'),projectContext)).json();assert.equal(metadata.total,14);
+    const page1 = await (await route.GET(new Request('http://localhost/api/responses?project_id=p&page=1&limit=10'))).json();
+    const page2 = await (await route.GET(new Request('http://localhost/api/responses?project_id=p&page=2&limit=10'))).json();
+    assert.equal(page1.pagination.total, 14);
+    assert.equal(page1.pagination.totalPages, 2);
+    assert.equal(page1.responses.length, 10);
+    assert.equal(page2.responses.length, 4);
+    assert.equal(new Set([...page1.responses, ...page2.responses].map(r => r.id)).size, 14);
+    const repeatedPage = await (await route.GET(new Request('http://localhost/api/responses?project_id=p&page=2&limit=10'))).json();
+    assert.deepEqual(repeatedPage.responses.map(r => r.id), page2.responses.map(r => r.id));
+    const pastEnd = await (await route.GET(new Request('http://localhost/api/responses?project_id=p&page=999'))).json();
+    assert.equal(pastEnd.pagination.page, 2);
+    const emptyPage = await (await route.GET(new Request('http://localhost/api/responses?project_id=missing&page=2'))).json();
+    assert.equal(emptyPage.pagination.page, 1);
+    assert.equal(emptyPage.responses.length, 0);
+    const bounded = await (await route.GET(new Request('http://localhost/api/responses?page=-2&limit=1000000'))).json();
+    assert.equal(bounded.pagination.page, 1);
+    assert.equal(bounded.pagination.limit, 100);
     const why=metadata.columns.find(c=>c.questionId==='why');assert.ok(why);assert.ok(metadata.columns.some(c=>c.key==='respondent_gender'));
     const fileResponse=await xlsx.POST(request({columns:['respondent_name',why.key]}),projectContext);assert.equal(fileResponse.status,200);
     const book=new ExcelJS.Workbook();await book.xlsx.load(Buffer.from(await fileResponse.arrayBuffer()));const sheet=book.worksheets[0];assert.equal(sheet.columnCount,2);assert.equal(sheet.rowCount,15);assert.equal(sheet.getCell('A1').value,'Tên');assert.equal(sheet.getCell('B2').type,ExcelJS.ValueType.String);assert.equal(sheet.getCell('B2').value,'=1+1');

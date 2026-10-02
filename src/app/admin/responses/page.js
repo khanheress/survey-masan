@@ -211,10 +211,10 @@ export default function ResponsesPage() {
                 </table>
               </div>
               <div className="data-pagination">
-                <span>{pagination.total} phản hồi · Trang {page} / {totalPages}</span>
+                <span>{pagination.total} phản hồi · Trang {pagination.page} / {totalPages}</span>
                 <div className="flex gap-2">
-                  <button className="btn btn-secondary btn-sm" disabled={page <= 1} onClick={() => setPage(previous => previous - 1)}>Trước</button>
-                  <button className="btn btn-secondary btn-sm" disabled={page >= totalPages} onClick={() => setPage(previous => previous + 1)}>Sau</button>
+                  <button className="btn btn-secondary btn-sm" disabled={pagination.page <= 1} onClick={() => setPage(pagination.page - 1)}>Trước</button>
+                  <button className="btn btn-secondary btn-sm" disabled={pagination.page >= totalPages} onClick={() => setPage(pagination.page + 1)}>Sau</button>
                 </div>
               </div>
             </div>
