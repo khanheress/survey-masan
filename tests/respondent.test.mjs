@@ -50,7 +50,7 @@ test('migration preserves legacy responses and can run twice', async () => {
   } finally {await db.close();}
 });
 
-test('inviter accepts only Khánh or Tế', () => {
+test('inviter accepts the configured inviters', () => {
   for (const inviter of INVITERS) {
     assert.equal(validateRespondent({ ...valid, respondent_inviter: inviter }).values.respondent_inviter, inviter);
   }

@@ -21,7 +21,7 @@ export async function parseParticipantWorkbook(buffer){
    if(!name||!occupation||!rawPhone||!rawInviter)throw Error('Thiếu tên, số điện thoại, nghề nghiệp hoặc người mời.');
    if(name.length>200||occupation.length>200||project.length>200)throw Error('Tên, nghề nghiệp và dự án tối đa 200 ký tự.');
    if(!/^0\d{9,10}$/.test(phone))throw Error('Số điện thoại không hợp lệ. Định dạng cột là Văn bản để giữ số 0 đầu.');
-   if(!inviter)throw Error('Người mời phải là Khánh hoặc Tế.');
+   if(!inviter)throw Error(`Người mời phải thuộc danh sách: ${INVITERS.join(', ')}.`);
    const currentYear=new Date().getFullYear();
    if(rawBirthYear&&(!/^\d{4}$/.test(rawBirthYear)||Number(rawBirthYear)<1900||Number(rawBirthYear)>currentYear))throw Error(`Năm sinh phải từ 1900 đến ${currentYear}.`);
    if(address.length>1000)throw Error('Địa chỉ tối đa 1.000 ký tự.');

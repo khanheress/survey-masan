@@ -1,11 +1,12 @@
 'use client';
 import {useState} from 'react';
 import Modal from './Modal';
+import {INVITERS} from '@/lib/respondent.mjs';
 export default function ImportParticipants({onClose,onSaved,projectId,projectName}){
  const [file,setFile]=useState(null),[result,setResult]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[done,setDone]=useState(false);
  async function upload(commit=false){setBusy(true);setError('');try{const body=new FormData();body.set('file',file);body.set('commit',String(commit));const response=await fetch(projectId?`/api/projects/${encodeURIComponent(projectId)}/members/import`:'/api/participants/import',{method:'POST',body});const data=await response.json();if(!response.ok)throw Error(data.error||'Không thể nhập file.');setResult(data);if(commit){setDone(true);onSaved(data);}}catch(e){setError(e.message);}finally{setBusy(false);}}
  return <Modal isOpen onClose={()=>{if(!busy)onClose();}} title={projectId?"Nhập người tham gia vào dự án":"Nhập data từ Excel"} size="lg">
-  <p className="form-hint">Trang đầu tiên có hàng tiêu đề: Tên, Năm sinh, Số điện thoại, Địa chỉ, Nghề nghiệp, Tình trạng hôn nhân, Dự án tham gia, Người mời. Tên, Số điện thoại, Nghề nghiệp và Người mời là các mục bắt buộc; các mục còn lại có thể để trống hoặc không có cột. Người mời: Khánh hoặc Tế.</p>
+  <p className="form-hint">Trang đầu tiên có hàng tiêu đề: Tên, Năm sinh, Số điện thoại, Địa chỉ, Nghề nghiệp, Tình trạng hôn nhân, Dự án tham gia, Người mời. Tên, Số điện thoại, Nghề nghiệp và Người mời là các mục bắt buộc; các mục còn lại có thể để trống hoặc không có cột. Người mời: {INVITERS.join(', ')}.</p>
   <p className="form-hint">Năm sinh: từ 1900 đến năm hiện tại. Tình trạng hôn nhân: Độc thân, Đã kết hôn - chưa con, Đã kết hôn - có con.</p>
   {projectId&&<p className="form-hint">Dự án: <strong>{projectName}</strong>. Người nhập thành công được duyệt ngay và xuất hiện trong Giao mẫu. Cột Dự án tham gia có thể để trống; tất cả được thêm vào dự án này.</p>}
   <p className="form-hint">Đặt cột số điện thoại thành Văn bản để giữ số 0 đầu. Mỗi dòng một hồ sơ, tối đa 1.000 dòng / 2 MB. {projectId?'Số điện thoại đã có trong Quản lý data sẽ dùng hồ sơ hiện có; số đã có trong dự án được bỏ qua.':'Số điện thoại trùng sẽ được bỏ qua, không ghi đè hồ sơ.'}</p>

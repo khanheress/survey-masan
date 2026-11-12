@@ -2,7 +2,7 @@ export const MARITAL_STATUSES = ['Độc thân', 'Đã kết hôn - chưa con', 
 
 export const GENDERS = ['Nam', 'Nữ'];
 
-export const INVITERS = ['Khánh', 'Tế'];
+export const INVITERS = ['Khánh', 'Tế', 'Ngọc'];
 
 export const RESPONDENT_FIELDS = [
   { key: 'respondent_name', label: 'Tên', type: 'text', placeholder: 'Nhập họ và tên', autoComplete: 'name', maxLength: 200 },

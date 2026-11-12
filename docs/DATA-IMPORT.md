@@ -12,7 +12,7 @@ Quản trị viên vào **Quản lý data → Nhập Excel .xlsx → Tải file 
 | Nghề nghiệp | Bắt buộc, tối đa 200 ký tự; cũng nhận tiêu đề Nghề nghiệp hiện tại |
 | Tình trạng hôn nhân | Không bắt buộc: Độc thân, Đã kết hôn - chưa con, Đã kết hôn - có con |
 | Dự án tham gia | Không bắt buộc; tên dự án, tối đa 200 ký tự |
-| Người mời | Khánh hoặc Tế |
+| Người mời | Khánh, Tế hoặc Ngọc |
 
 File cũ không có ba cột bổ sung vẫn nhập được. Các giá trị bổ sung được lưu vào hồ sơ và hiển thị trong màn hình xem trước.
 
