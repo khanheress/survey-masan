@@ -76,7 +76,7 @@ export default function ResponsesPage() {
     if(inviter)params.set('inviter',inviter);
     params.set('sort',sort);
     if(reviewStatus)params.set('review_status',reviewStatus);
-    const res = await fetch(`/api/responses?${params.toString()}`, { signal });
+    const res = await fetch(`/api/responses?${params.toString()}`, { signal, cache: 'no-store' });
     if (!res.ok) throw new Error('Failed to load responses');
     const data = await res.json();
     return { responses: data.responses || [], pagination: data.pagination || emptyResponses.pagination };
@@ -186,7 +186,6 @@ export default function ResponsesPage() {
                     <tr>
                       <th>Tên</th>
                       <th>SĐT</th><th>Người mời</th>
-                      <th>Email</th>
                       <th>Dự án</th>
                       <th>Khảo sát</th>
                       <th>Ngày nộp</th>
@@ -198,15 +197,14 @@ export default function ResponsesPage() {
                       <tr key={response.id} onClick={() => setSelectedResponse(response)} style={{ cursor: 'pointer' }}>
                         <td style={{ fontWeight: 500 }}>{response.respondent_name || 'Ẩn danh'}</td>
                         <td>{response.respondent_phone || '-'}</td><td>{response.respondent_inviter || '—'}</td>
-                        <td>{response.respondent_email || '-'}</td>
                         <td>{response.projectName}</td>
                         <td>{response.surveyName}</td>
                         <td style={{ color: 'var(--text-secondary)' }}>{new Date(response.created_at).toLocaleString('vi-VN')}</td>
                         <td><div className="flex gap-2">
                           <ResponseReview response={response} onSaved={()=>refresh()}/>
-                        <button className="btn btn-secondary btn-sm" aria-label={`Xem phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setSelectedResponse(response); }}>Xem</button>
-                          {canDelete && <button className="btn btn-secondary btn-sm" aria-label={`Sửa thông tin của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setEditingResponse(response); }}>Sửa thông tin</button>}
-                          {canDelete && <button className="btn btn-danger btn-sm" aria-label={`Xóa phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setPendingDelete(response); }}><Icon name="trash" /> Xóa</button>}
+                        <button className="btn btn-secondary btn-icon" title="Xem phản hồi" aria-label={`Xem phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setSelectedResponse(response); }}><Icon name="eye" /></button>
+                          {canDelete && <button className="btn btn-secondary btn-icon" title="Sửa thông tin" aria-label={`Sửa thông tin của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setEditingResponse(response); }}><Icon name="edit" /></button>}
+                          {canDelete && <button className="btn btn-danger btn-icon" title="Xóa phản hồi" aria-label={`Xóa phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setPendingDelete(response); }}><Icon name="trash" /></button>}
                         </div></td>
                       </tr>
                     ))}
@@ -226,10 +224,10 @@ export default function ResponsesPage() {
 
       </div>
 
-      {editingResponse && <EditResponse key={editingResponse.id} response={editingResponse} onClose={() => setEditingResponse(null)} onSaved={updated => { setEditingResponse(null); setSelectedResponse(updated); refresh(); addToast('Đã cập nhật thông tin phản hồi.', 'success'); }} />}
+      {editingResponse && <EditResponse key={editingResponse.id} response={editingResponse} onClose={() => setEditingResponse(null)} onSaved={updated => { setEditingResponse(null); setSelectedResponse(updated); refresh(current => ({ ...current, responses: current.responses.map(response => response.id === updated.id ? updated : response) })); addToast('Đã cập nhật thông tin phản hồi.', 'success'); }} />}
       <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md" footer={canDelete && <>
-        <button className="btn btn-secondary" onClick={() => { setEditingResponse(selectedResponse); setSelectedResponse(null); }}>Sửa thông tin</button>
-        <button className="btn btn-danger" onClick={() => { setPendingDelete(selectedResponse); setSelectedResponse(null); }}><Icon name="trash" /> Xóa phản hồi này</button>
+        <button className="btn btn-secondary btn-icon" title="Sửa thông tin" aria-label="Sửa thông tin" onClick={() => { setEditingResponse(selectedResponse); setSelectedResponse(null); }}><Icon name="edit" /></button>
+        <button className="btn btn-danger btn-icon" title="Xóa phản hồi" aria-label="Xóa phản hồi" onClick={() => { setPendingDelete(selectedResponse); setSelectedResponse(null); }}><Icon name="trash" /></button>
       </>}>
         {selectedResponse && (
           <div>

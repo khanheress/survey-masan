@@ -30,7 +30,7 @@ export default function DataPage() {
   const [exporting, setExporting] = useState(false);
   const query = new URLSearchParams(filters).toString();
   const load = useCallback(async signal => {
-    const response = await fetch(`/api/participants?${query}`, { signal });
+    const response = await fetch(`/api/participants?${query}`, { signal, cache: 'no-store' });
     if (!response.ok) throw new Error('Không thể tải data');
     return response.json();
   }, [query]);
@@ -125,7 +125,7 @@ export default function DataPage() {
 
       {projectPerson&&<ParticipantProjects key={projectPerson.id} person={projectPerson} onClose={()=>setProjectPerson(null)} onSaved={()=>{setSelectedPerson(null);refresh();addToast('Đã gỡ dự án khỏi lịch sử hồ sơ','success');}}/>}
       {importing&&<ImportParticipants onClose={()=>setImporting(false)} onSaved={result=>{refresh();addToast(`Đã nhập ${result.added} hồ sơ`,'success');}}/>}
-      {editing&&<EditParticipant person={editing} onClose={()=>setEditing(null)} onSaved={()=>{setEditing(null);setSelectedPerson(null);refresh();addToast('Đã cập nhật hồ sơ','success');}}/>}
+      {editing&&<EditParticipant person={editing} onClose={()=>setEditing(null)} onSaved={updated=>{const previousId=editing.id;setEditing(null);setSelectedPerson(previous=>previous?.id===previousId?updated:previous);setProjectPerson(previous=>previous?.id===previousId?updated:previous);refresh(current=>({...current,participants:current.participants.map(person=>person.id===previousId?updated:person)}));addToast('Đã cập nhật hồ sơ','success');}}/>}
       <Modal isOpen={!!selectedPerson} onClose={() => setSelectedPerson(null)} title="Hồ sơ người tham gia" size="lg">
         {selectedPerson && <>
           <RespondentDetails response={{ ...selectedPerson, created_at: selectedPerson.last_seen }} /><ParticipantBlacklist key={selectedPerson.id} person={selectedPerson} onSaved={blacklisted=>{setSelectedPerson(previous=>previous?.id===selectedPerson.id?{...previous,blacklisted}:previous);refresh();addToast(blacklisted?'Đã chặn đăng ký mới':'Đã bỏ blacklist','success');}}/>

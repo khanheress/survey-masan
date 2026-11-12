@@ -55,7 +55,7 @@ function ProjectDetail({ id }) {
 
   const loadResponses = useCallback(async signal => {
     const query = new URLSearchParams({ project_id: id, page: String(responsePage), limit: '10' });
-    const res = await fetch(`/api/responses?${query}`, { signal });
+    const res = await fetch(`/api/responses?${query}`, { signal, cache: 'no-store' });
     if (!res.ok) throw new Error('Không thể tải phản hồi.');
     return res.json();
   }, [id, responsePage]);
@@ -290,7 +290,6 @@ function ProjectDetail({ id }) {
                     <tr>
                       <th>Tên</th>
                       <th>Số điện thoại</th>
-                      <th>Email</th>
                       <th>Khảo sát</th>
                       <th>Ngày nộp</th>
                     </tr>
@@ -300,7 +299,6 @@ function ProjectDetail({ id }) {
                       <tr key={response.id} onClick={() => setSelectedResponse(response)} style={{ cursor: 'pointer' }}>
                         <td style={{ fontWeight: 500 }}>{response.respondent_name || 'Ẩn danh'}</td>
                         <td>{response.respondent_phone || '-'}</td>
-                        <td>{response.respondent_email || '-'}</td>
                         <td>{response.surveyName}</td>
                         <td style={{ color: 'var(--text-secondary)' }}>{new Date(response.created_at).toLocaleString('vi-VN')}</td>
                       </tr>
@@ -339,8 +337,8 @@ function ProjectDetail({ id }) {
         </div>
       </Modal>
 
-      {editingResponse && <EditResponse key={editingResponse.id} response={editingResponse} onClose={() => setEditingResponse(null)} onSaved={updated => { setEditingResponse(null); setSelectedResponse(updated); refreshResponses(); fetchProjectData(); addToast('Đã cập nhật thông tin phản hồi.', 'success'); }} />}
-      <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md" footer={<button className="btn btn-secondary" onClick={() => { setEditingResponse(selectedResponse); setSelectedResponse(null); }}>Sửa thông tin</button>}>
+      {editingResponse && <EditResponse key={editingResponse.id} response={editingResponse} onClose={() => setEditingResponse(null)} onSaved={updated => { setEditingResponse(null); setSelectedResponse(updated); refreshResponses(current => ({ ...current, responses: current.responses.map(response => response.id === updated.id ? updated : response) })); fetchProjectData(current => current); addToast('Đã cập nhật thông tin phản hồi.', 'success'); }} />}
+      <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md" footer={<button className="btn btn-secondary btn-icon" title="Sửa thông tin" aria-label="Sửa thông tin" onClick={() => { setEditingResponse(selectedResponse); setSelectedResponse(null); }}><Icon name="edit" /></button>}>
         {selectedResponse && (
           <div>
             <RespondentDetails response={selectedResponse} /><SummaryPreview key={selectedResponse.id} projectId={id} responseId={selectedResponse.id}/>

@@ -54,7 +54,6 @@ export async function GET(request) {
         'Nghề nghiệp hiện tại': r.respondent_occupation,
         'Tình trạng hôn nhân': r.respondent_marital_status,
         'Người mời': r.respondent_inviter,
-        'Email': r.respondent_email,
         'Submitted At': r.created_at,
         ...Object.fromEntries(Object.entries(data).map(([key,value])=>[key,formatAnswer(value)]))
       };

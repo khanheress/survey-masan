@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Modal from '@/components/Modal';
 import { RESPONDENT_FIELDS } from '@/lib/respondent.mjs';
 
-const fields = [...RESPONDENT_FIELDS, { key: 'respondent_email', label: 'Email', type: 'email', maxLength: 254 }];
+const fields = RESPONDENT_FIELDS;
 
 export default function EditResponse({ response, onClose, onSaved }) {
   const [values, setValues] = useState(() => Object.fromEntries(fields.map(field => [field.key, response[field.key] ?? ''])));
