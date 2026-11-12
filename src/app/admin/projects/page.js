@@ -5,15 +5,15 @@ import Icon from '@/components/Icon';
 import ProjectRulesEditor from '@/components/ProjectRulesEditor';
 import {emptyProjectRules,parseProjectRules} from '@/lib/projectRules.mjs';
 import useRemoteData from '@/hooks/useRemoteData';
+import { sortProjects, formatProjectDate } from '@/lib/projectList.mjs';
 
-import React, { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import Modal from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 
 export default function ProjectsPage() {
-  const router = useRouter();
   const { data: session } = useSession();
   const { addToast } = useToast();
   
@@ -33,14 +33,30 @@ export default function ProjectsPage() {
     status: 'active', rules_json: emptyProjectRules()
   });
   const [formLoading, setFormLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [sort, setSort] = useState({ key: 'created_at', direction: 'desc' });
 
   const loadProjects = useCallback(async (signal) => {
-    const res = await fetch('/api/projects', { signal });
+    const res = await fetch('/api/projects', { signal, cache: 'no-store' });
     if (!res.ok) throw new Error('Failed to load projects');
     return res.json();
   }, []);
-  const { data: projects, loading, refresh: fetchProjects } = useRemoteData(
+  const { data: projects, loading, error, refresh: fetchProjects } = useRemoteData(
     loadProjects, [], 'Lỗi khi tải danh sách dự án'
+  );
+  const visibleProjects = useMemo(() => sortProjects(
+    projects.filter(project => !statusFilter || project.status === statusFilter), sort
+  ), [projects, statusFilter, sort]);
+  const changeSort = key => setSort(previous => ({
+    key, direction: previous.key === key && previous.direction === 'asc' ? 'desc' : 'asc',
+  }));
+  const sortHeader = (key, label) => (
+    <th scope="col" aria-sort={sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className="btn btn-ghost btn-sm" style={{ padding: 0, whiteSpace: 'nowrap', color: 'inherit' }}
+        onClick={() => changeSort(key)} title={key === 'status' ? 'Đổi thứ tự Onfield / Đóng' : `Sắp xếp theo ${label.toLowerCase()}`}>
+        {label} <span aria-hidden="true">{sort.key === key ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
+      </button>
+    </th>
   );
 
   const handleInputChange = (e) => {
@@ -82,9 +98,10 @@ export default function ProjectsPage() {
         body: JSON.stringify({ ...formData, max_responses: formData.max_responses ? parseInt(formData.max_responses) : null })
       });
       if (res.ok) {
+        const created = await res.json();
         addToast('Tạo dự án thành công', 'success');
         setIsCreateModalOpen(false);
-        fetchProjects();
+        fetchProjects(current => [...current, { ...created, survey_count: 0, response_count: 0 }]);
       } else {
         const errorData = await res.json();
         addToast(errorData.error || 'Lỗi khi tạo dự án', 'error');
@@ -106,9 +123,10 @@ export default function ProjectsPage() {
         body: JSON.stringify({ ...formData, max_responses: formData.max_responses ? parseInt(formData.max_responses) : null })
       });
       if (res.ok) {
+        const updated = await res.json();
         addToast('Cập nhật dự án thành công', 'success');
         setIsEditModalOpen(false);
-        fetchProjects();
+        fetchProjects(current => current.map(project => project.id === updated.id ? { ...project, ...updated } : project));
       } else {
         const errorData = await res.json();
         addToast(errorData.error || 'Lỗi khi cập nhật dự án', 'error');
@@ -129,7 +147,7 @@ export default function ProjectsPage() {
       if (res.ok) {
         addToast('Xóa dự án thành công', 'success');
         setIsDeleteModalOpen(false);
-        fetchProjects();
+        fetchProjects(current => current.filter(project => project.id !== currentProject.id));
       } else {
         const errorData = await res.json();
         addToast(errorData.error || 'Lỗi khi xóa dự án', 'error');
@@ -190,67 +208,87 @@ export default function ProjectsPage() {
         </button>
       </div>
 
-      {loading ? (
-        <div className="grid-cols-3">
-          {Array(6).fill(0).map((_, i) => (
-            <div key={i} className="card skeleton" style={{ height: '240px' }}></div>
-          ))}
+      <div className="card" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'end', gap: '1rem', flexWrap: 'wrap' }}>
+        <label className="form-label" htmlFor="project-status-filter" style={{ minWidth: 200, marginBottom: 0 }}>
+          Trạng thái dự án
+          <select id="project-status-filter" className="form-select" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+            <option value="">Tất cả trạng thái</option>
+            <option value="active">Onfield</option>
+            <option value="inactive">Đóng</option>
+          </select>
+        </label>
+        <div style={{ flex: 1 }}>
+          <p aria-live="polite">{loading ? 'Đang tải…' : `${visibleProjects.length} / ${projects.length} dự án`}</p>
+          <p className="form-hint" style={{ marginBottom: 0 }}>Bấm tiêu đề cột để đổi thứ tự tăng/giảm. Ngày chưa đặt được xếp cuối.</p>
         </div>
+      </div>
+
+      {loading ? (
+        <div className="card skeleton" style={{ height: 320 }} role="status" aria-label="Đang tải dự án" />
+      ) : error ? (
+        <div className="card empty-state"><p role="alert">Không thể tải danh sách dự án.</p><button className="btn btn-secondary" onClick={fetchProjects}>Thử lại</button></div>
       ) : projects.length === 0 ? (
         <div className="glass-card empty-state">
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}><Icon name="folder" /></div>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Chưa có dự án nào</h3>
+          <Icon name="folder" size={32} />
+          <h3 style={{ margin: '1rem 0 .5rem' }}>Chưa có dự án nào</h3>
           <p>Bắt đầu bằng cách tạo dự án khảo sát đầu tiên của bạn.</p>
-          <button className="btn btn-primary" style={{ marginTop: '1.5rem' }} onClick={openCreateModal}>
-            Tạo Dự án Ngay
-          </button>
+          <button className="btn btn-primary" style={{ marginTop: '1.5rem' }} onClick={openCreateModal}>Tạo Dự án Ngay</button>
         </div>
       ) : (
-        <div className="grid-cols-3">
-          {projects.map(project => {
-            const progress = project.max_responses ? Math.min(100, Math.round(((project.response_count || 0) / project.max_responses) * 100)) : 0;
-            return (
-              <div key={project.id} className="card" style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer' }} onClick={() => router.push(`/admin/projects/${project.id}`)}>
-                <div className="flex-between" style={{ marginBottom: '1rem' }}>
-                  <span className={`badge ${project.status === 'active' ? 'badge-active' : 'badge-inactive'}`}>
-                    {project.status === 'active' ? 'Onfield' : 'Đóng'}
-                  </span>
-                  {isAdmin && (
-                    <div style={{ display: 'flex', gap: '0.5rem' }} onClick={e => e.stopPropagation()}>
-                      <CopyProject project={project}/><button className="btn btn-secondary btn-icon" title="Chỉnh sửa dự án" aria-label="Chỉnh sửa dự án" onClick={() => openEditModal(project)}><Icon name="edit" /></button>
-                      <button className="btn btn-secondary btn-icon" style={{ color: 'var(--danger)' }} title="Xóa dự án" aria-label="Xóa dự án" onClick={() => openDeleteModal(project)}><Icon name="trash" /></button>
-                    </div>
-                  )}
-                </div>
-                
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>{project.name}</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1 }}>
-                  {project.description || 'Không có mô tả'}
-                </p>
-                
-                <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <Icon name="calendar" /> {project.start_date ? new Date(project.start_date).toLocaleDateString('vi-VN') : 'N/A'} - {project.end_date ? new Date(project.end_date).toLocaleDateString('vi-VN') : 'N/A'}
-                </div>
-
-                {project.max_responses && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div className="flex-between" style={{ fontSize: '0.75rem', marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>
-                      <span>Tiến độ</span>
-                      <span>{project.response_count || 0} / {project.max_responses}</span>
-                    </div>
-                    <div style={{ height: '6px', background: 'var(--bg-tertiary)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${progress}%`, background: 'var(--accent-gradient)', borderRadius: '3px' }}></div>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Icon name="chart" /> {project.survey_count || 0} khảo sát</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Icon name="file" /> {project.response_count || 0} phản hồi</span>
-                </div>
-              </div>
-            );
-          })}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table" aria-label="Danh sách dự án">
+              <thead>
+                <tr>
+                  {sortHeader('name', 'Dự án')}
+                  {sortHeader('status', 'Trạng thái')}
+                  {sortHeader('start_date', 'Ngày bắt đầu')}
+                  {sortHeader('end_date', 'Ngày kết thúc')}
+                  {sortHeader('created_at', 'Ngày tạo')}
+                  <th scope="col">Khảo sát</th>
+                  <th scope="col">Phản hồi</th>
+                  <th scope="col">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleProjects.map(project => {
+                  const progress = project.max_responses > 0 ? Math.min(100, Math.round(((project.response_count || 0) / project.max_responses) * 100)) : 0;
+                  return (
+                    <tr key={project.id}>
+                      <td style={{ minWidth: 220, maxWidth: 320 }}>
+                        <Link href={`/admin/projects/${encodeURIComponent(project.id)}`} style={{ fontWeight: 600 }}>{project.name}</Link>
+                        <p title={project.description || ''} style={{ color: 'var(--text-secondary)', fontSize: '.875rem', margin: '.25rem 0 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {project.description || 'Không có mô tả'}
+                        </p>
+                      </td>
+                      <td><span className={`badge ${project.status === 'active' ? 'badge-active' : 'badge-inactive'}`}>{project.status === 'active' ? 'Onfield' : 'Đóng'}</span></td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{formatProjectDate(project.start_date)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{formatProjectDate(project.end_date)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{project.created_at ? formatProjectDate(project.created_at) : '—'}</td>
+                      <td>{project.survey_count || 0}</td>
+                      <td style={{ minWidth: 130 }}>
+                        <span>{project.response_count || 0}{project.max_responses > 0 ? ` / ${project.max_responses}` : ''}</span>
+                        {project.max_responses > 0 && <div role="progressbar" aria-label={`Tiến độ phản hồi ${project.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} style={{ height: 6, background: 'var(--bg-tertiary)', borderRadius: 3, overflow: 'hidden', marginTop: 6 }}>
+                          <div style={{ height: '100%', width: `${progress}%`, background: 'var(--accent-gradient)' }} />
+                        </div>}
+                      </td>
+                      <td>
+                        <div className="flex gap-2" style={{ flexWrap: 'nowrap' }}>
+                          <Link className="btn btn-secondary btn-icon" href={`/admin/projects/${encodeURIComponent(project.id)}`} title="Xem dự án" aria-label={`Xem dự án ${project.name}`}><Icon name="eye" /></Link>
+                          {isAdmin && <>
+                            <CopyProject project={project} />
+                            <button className="btn btn-secondary btn-icon" title="Chỉnh sửa dự án" aria-label={`Chỉnh sửa dự án ${project.name}`} onClick={() => openEditModal(project)}><Icon name="edit" /></button>
+                            <button className="btn btn-secondary btn-icon" style={{ color: 'var(--danger)' }} title="Xóa dự án" aria-label={`Xóa dự án ${project.name}`} onClick={() => openDeleteModal(project)}><Icon name="trash" /></button>
+                          </>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {visibleProjects.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem' }}>Không có dự án ở trạng thái này. <button className="btn btn-secondary btn-sm" onClick={() => setStatusFilter('')}>Xem tất cả</button></td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
