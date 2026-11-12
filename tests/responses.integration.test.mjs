@@ -1,6 +1,7 @@
 import * as participantBlacklist from '../src/lib/participantBlacklist.mjs';
 import * as phone from '../src/lib/phone.mjs';
 import * as responseReview from '../src/lib/responseReview.mjs';
+import * as responseEditing from '../src/lib/responseEditing.mjs';
 import * as participantEditing from '../src/lib/participantEditing.mjs';
 import ExcelJS from 'exceljs';
 import * as projectExport from '../src/lib/projectExport.mjs';
@@ -50,6 +51,7 @@ test('submission, listing and CSV retain all profile fields and answers', async 
       '@/lib/projectRules.mjs': projectRules,
       '@/lib/projectExport.mjs': projectExport,
       '@/lib/responseReview.mjs': responseReview,
+      '@/lib/responseEditing.mjs': responseEditing,
       '@/lib/participantEditing.mjs': participantEditing,
       exceljs: {default:ExcelJS},
       '@/lib/surveyAdvanced.mjs': { formatAnswer, validateAdvancedAnswer, pipeText },
@@ -160,6 +162,24 @@ test('submission, listing and CSV retain all profile fields and answers', async 
     const deleteRoute = await loadRoute('../src/app/api/responses/[id]/route.js');
     const deleteRequest = new Request('http://localhost/api/responses/' + saved.id, { method: 'DELETE' });
     const deleteContext = { params: Promise.resolve({ id: saved.id }) };
+    const editResponseRequest = body => new Request('http://localhost/api/responses/' + saved.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const edit = { respondent_name: 'Tên đã sửa', respondent_inviter: 'Ngọc', respondent_email: 'updated@example.test' };
+    const archiveBeforeEdit = await listParticipants(db);
+    signedIn = false;
+    assert.equal((await deleteRoute.PUT(editResponseRequest(edit), deleteContext)).status, 401);
+    signedIn = true; role = 'moderator';
+    assert.equal((await deleteRoute.PUT(editResponseRequest(edit), deleteContext)).status, 403);
+    role = 'admin';
+    assert.equal((await deleteRoute.PUT(editResponseRequest({ respondent_phone: '+84 909 999 999' }), deleteContext)).status, 409);
+    assert.equal((await deleteRoute.PUT(editResponseRequest(edit), deleteContext)).status, 200);
+    const updatedListing = await (await route.GET(new Request('http://localhost/api/responses?inviter=' + encodeURIComponent('Ngọc')))).json();
+    assert.equal(updatedListing.responses.length, 1);
+    assert.equal(updatedListing.responses[0].respondent_name, edit.respondent_name);
+    assert.deepEqual(updatedListing.responses[0].answers_json, payload.answers_json);
+    const editedCsv = Papa.parse(await (await exportRoute.GET(new Request('http://localhost/api/responses/export?inviter=' + encodeURIComponent('Ngọc')))).text(), { header: true }).data;
+    assert.equal(editedCsv[0]['Người mời'], 'Ngọc');
+    assert.deepEqual(await listParticipants(db), archiveBeforeEdit);
+    assert.equal((await deleteRoute.PUT(editResponseRequest(edit), { params: Promise.resolve({ id: 'missing' }) })).status, 404);
     const countBeforeDelete = (await db.prepare('SELECT COUNT(*) AS n FROM responses').get()).n;
     signedIn = false;
     assert.equal((await deleteRoute.DELETE(deleteRequest, deleteContext)).status, 401);

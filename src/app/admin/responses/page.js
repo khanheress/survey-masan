@@ -8,6 +8,7 @@ import {INVITERS} from '@/lib/respondent.mjs';
 import SurveyAnswerValue from '@/components/SurveyAnswerValue';
 import { useSession } from 'next-auth/react';
 import RespondentDetails from '@/components/RespondentDetails';
+import EditResponse from '@/components/EditResponse';
 import { downloadCsv } from '@/lib/downloadCsv';
 import useRemoteData from '@/hooks/useRemoteData';
 
@@ -37,6 +38,7 @@ export default function ResponsesPage() {
   
   // Modals
   const [selectedResponse, setSelectedResponse] = useState(null);
+  const [editingResponse, setEditingResponse] = useState(null);
   
   useEffect(() => {
     const fetchProjects = async () => {
@@ -203,6 +205,7 @@ export default function ResponsesPage() {
                         <td><div className="flex gap-2">
                           <ResponseReview response={response} onSaved={()=>refresh()}/>
                         <button className="btn btn-secondary btn-sm" aria-label={`Xem phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setSelectedResponse(response); }}>Xem</button>
+                          {canDelete && <button className="btn btn-secondary btn-sm" aria-label={`Sửa thông tin của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setEditingResponse(response); }}>Sửa thông tin</button>}
                           {canDelete && <button className="btn btn-danger btn-sm" aria-label={`Xóa phản hồi của ${response.respondent_name || response.respondent_phone || 'người tham gia'}`} onClick={event => { event.stopPropagation(); setPendingDelete(response); }}><Icon name="trash" /> Xóa</button>}
                         </div></td>
                       </tr>
@@ -223,7 +226,11 @@ export default function ResponsesPage() {
 
       </div>
 
-      <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md" footer={canDelete && <button className="btn btn-danger" onClick={() => { setPendingDelete(selectedResponse); setSelectedResponse(null); }}><Icon name="trash" /> Xóa phản hồi này</button>}>
+      {editingResponse && <EditResponse key={editingResponse.id} response={editingResponse} onClose={() => setEditingResponse(null)} onSaved={updated => { setEditingResponse(null); setSelectedResponse(updated); refresh(); addToast('Đã cập nhật thông tin phản hồi.', 'success'); }} />}
+      <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md" footer={canDelete && <>
+        <button className="btn btn-secondary" onClick={() => { setEditingResponse(selectedResponse); setSelectedResponse(null); }}>Sửa thông tin</button>
+        <button className="btn btn-danger" onClick={() => { setPendingDelete(selectedResponse); setSelectedResponse(null); }}><Icon name="trash" /> Xóa phản hồi này</button>
+      </>}>
         {selectedResponse && (
           <div>
             <RespondentDetails response={selectedResponse} /><SummaryPreview key={selectedResponse.id} projectId={selectedResponse.project_id} responseId={selectedResponse.id}/><ResponseReview response={selectedResponse} onSaved={review_status=>{setSelectedResponse({...selectedResponse,review_status});refresh();}}/>

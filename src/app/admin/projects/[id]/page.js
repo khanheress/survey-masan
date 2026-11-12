@@ -13,6 +13,7 @@ import DeleteSurvey from '@/components/DeleteSurvey';
 const RecallManager=dynamic(()=>import('@/components/RecallManager'),{loading:()=> <p>Đang tải…</p>});
 import SurveyAnswerValue from '@/components/SurveyAnswerValue';
 import RespondentDetails from '@/components/RespondentDetails';
+import EditResponse from '@/components/EditResponse';
 import { downloadCsv } from '@/lib/downloadCsv';
 import useRemoteData from '@/hooks/useRemoteData';
 
@@ -36,6 +37,7 @@ function ProjectDetail({ id }) {
   const [surveyForm, setSurveyForm] = useState({ title: '', description: '' });
   const [formLoading, setFormLoading] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState(null);
+  const [editingResponse, setEditingResponse] = useState(null);
   const [responsePage, setResponsePage] = useState(1);
 
   const loadProjectData = useCallback(async (signal) => {
@@ -337,7 +339,8 @@ function ProjectDetail({ id }) {
         </div>
       </Modal>
 
-      <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md">
+      {editingResponse && <EditResponse key={editingResponse.id} response={editingResponse} onClose={() => setEditingResponse(null)} onSaved={updated => { setEditingResponse(null); setSelectedResponse(updated); refreshResponses(); fetchProjectData(); addToast('Đã cập nhật thông tin phản hồi.', 'success'); }} />}
+      <Modal isOpen={!!selectedResponse} onClose={() => setSelectedResponse(null)} title="Chi tiết Phản hồi" size="md" footer={<button className="btn btn-secondary" onClick={() => { setEditingResponse(selectedResponse); setSelectedResponse(null); }}>Sửa thông tin</button>}>
         {selectedResponse && (
           <div>
             <RespondentDetails response={selectedResponse} /><SummaryPreview key={selectedResponse.id} projectId={id} responseId={selectedResponse.id}/>
