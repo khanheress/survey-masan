@@ -11,8 +11,48 @@ import { initializeRecallStore, saveRecallForm, publicRecallForm, bookRecall, ge
 const user = { id: 'owner', role: 'moderator' };
 const settings = { project_id:'p', title: 'Form thử', description: 'Lịch hẹn', allow_overlap: false, is_open: true, slots: ['2030-10-01T09:00', '2030-10-01T10:00'] };
 const now = new Date('2030-09-30T00:00:00Z');
-const booking = { name: 'Nguyễn An', phone: '0901234567', starts_at: settings.slots[0] };
+const booking = { name: 'Nguyễn An', phone: '0901234567', inviter: 'Ngọc', starts_at: settings.slots[0] };
 const setup = async () => {const db = new Database(':memory:');await db.exec("CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,name TEXT); INSERT OR IGNORE INTO projects VALUES ('p','Dự án thử');");await initializeRecallStore(db);return db;};
+
+test('Recall requires a valid inviter and stores each selected inviter without exposing bookings publicly', async () => {
+  const db = await setup();
+  try {
+    const form = await saveRecallForm(db, { ...settings, allow_overlap: true }, user);
+    for (const inviter of [undefined, null, '', 'Khác', {}, ['Ngọc']]) {
+      await assert.rejects(() => bookRecall(db, form.share_token, { ...booking, inviter }, now), error => error.status === 400 && /người mời/.test(error.message));
+    }
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM recall_bookings').get()).n, 0);
+    for (const [index, inviter] of ['Khánh', 'Tế', 'Ngọc'].entries()) {
+      const phone = `090000000${index}`;
+      const receipt = await bookRecall(db, form.share_token, { ...booking, phone, inviter: ` ${inviter} ` }, now);
+      assert.equal(receipt.inviter, inviter);
+      assert.equal((await db.prepare('SELECT inviter FROM recall_bookings WHERE phone = ?').get(phone)).inviter, inviter);
+    }
+    await assert.rejects(() => bookRecall(db, form.share_token, { ...booking, phone: '+84 900 000 002', inviter: 'Khánh' }, now), error => error.status === 409);
+    const publicForm = await publicRecallForm(db, form.share_token, now);
+    assert.equal(Object.hasOwn(publicForm, 'bookings'), false);
+    assert.equal(JSON.stringify(publicForm).includes('Ngọc'), false);
+  } finally { await db.close(); }
+});
+
+test('Recall inviter migration preserves old bookings and can run repeatedly', async () => {
+  const db = new Database(':memory:');
+  try {
+    await db.exec(`CREATE TABLE recall_bookings (
+      id TEXT PRIMARY KEY, form_id TEXT NOT NULL, starts_at TEXT NOT NULL,
+      name TEXT NOT NULL, phone TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(form_id, starts_at, phone));
+      INSERT INTO recall_bookings(id,form_id,starts_at,name,phone) VALUES ('legacy','form','2030-10-01T09:00','An','0901234567');`);
+    await initializeRecallStore(db);
+    await initializeRecallStore(db);
+    const rows = await db.prepare('SELECT * FROM recall_bookings').all();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].name, 'An');
+    assert.equal(rows[0].phone, '0901234567');
+    assert.equal(rows[0].starts_at, '2030-10-01T09:00');
+    assert.equal(rows[0].inviter, null);
+  } finally { await db.close(); }
+});
 
 test('unique token, dates and public payload; no attendee personal data exposed', async () => {
   const db = await setup();

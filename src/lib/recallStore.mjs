@@ -2,6 +2,7 @@ import {initializeBlacklistStore,isPhoneBlacklisted,BLOCKED_MESSAGE} from './par
 import {resolveRecallSchedule} from './recallSchedule.mjs';
 import { randomUUID } from 'node:crypto';
 import { normalizePhone } from './participantStore.mjs';
+import { INVITERS } from './respondent.mjs';
 
 export class RecallError extends Error {
   constructor(message, status = 400) {super(message);this.status = status;}
@@ -25,6 +26,8 @@ export async function initializeRecallStore(db) {
   );
   CREATE INDEX IF NOT EXISTS recall_bookings_slot ON recall_bookings(form_id, starts_at);`);
   await db.transaction(async()=>{
+    const bookingColumns=new Set((await db.prepare('PRAGMA table_info(recall_bookings)').all()).map(c=>c.name));
+    if(!bookingColumns.has('inviter'))await db.exec('ALTER TABLE recall_bookings ADD COLUMN inviter TEXT');
     const columns=new Set((await db.prepare('PRAGMA table_info(recall_forms)').all()).map(c=>c.name));
     if(!columns.has('schedule_json'))await db.exec('ALTER TABLE recall_forms ADD COLUMN schedule_json TEXT');
     if(!columns.has('project_id'))await db.exec('ALTER TABLE recall_forms ADD COLUMN project_id TEXT');
@@ -113,10 +116,13 @@ export async function publicRecallForm(db, token, now = new Date()) {
 }
 
 export async function bookRecall(db, token, input, now = new Date()) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new RecallError('Thông tin đăng ký không hợp lệ.');
   const name = typeof input.name === 'string' ? input.name.trim() : '';
   const phone = typeof input.phone === 'string' ? normalizePhone(input.phone) : '';
+  const inviter = typeof input.inviter === 'string' ? input.inviter.trim() : '';
   if (!name || name.length > 200) throw new RecallError('Vui lòng nhập tên, tối đa 200 ký tự.');
   if (!/^\+?\d{8,15}$/.test(phone)) throw new RecallError('Vui lòng nhập số điện thoại hợp lệ.');
+  if (!INVITERS.includes(inviter)) throw new RecallError('Vui lòng chọn người mời hợp lệ.');
   if (typeof input.starts_at !== 'string') throw new RecallError('Vui lòng chọn ngày và giờ đăng ký.');
   // Lock before reading capacity: two simultaneous requests cannot reserve the same exclusive slot.
   return await db.transaction(async () => {
@@ -134,8 +140,8 @@ export async function bookRecall(db, token, input, now = new Date()) {
     if (form.capacity_per_slot !== null && bookingCount.count >= form.capacity_per_slot) {
       throw new RecallError('Khung giờ vừa hết chỗ. Vui lòng chọn giờ khác.', 409);
     }
-    await db.prepare('INSERT INTO recall_bookings (id, form_id, starts_at, name, phone) VALUES (?, ?, ?, ?, ?)').
-    run(randomUUID(), form.id, slot.starts_at, name, phone);
-    return { title: form.title, starts_at: slot.starts_at, message: 'Đăng ký thành công' };
+    await db.prepare('INSERT INTO recall_bookings (id, form_id, starts_at, name, phone, inviter) VALUES (?, ?, ?, ?, ?, ?)').
+    run(randomUUID(), form.id, slot.starts_at, name, phone, inviter);
+    return { title: form.title, starts_at: slot.starts_at, inviter, message: 'Đăng ký thành công' };
   }).immediate();
 }

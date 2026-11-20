@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import Icon from '@/components/Icon';
+import { INVITERS } from '@/lib/respondent.mjs';
 
 const formatDate = value => value.split('-').reverse().join('/');
 
@@ -12,6 +13,7 @@ function RecallRegistration({ token }) {
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [inviter, setInviter] = useState('');
   const [date, setDate] = useState('');
   const [slot, setSlot] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -39,7 +41,7 @@ function RecallRegistration({ token }) {
     setError('');
     try {
       const response = await fetch(`/api/public/recall/${token}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, phone, starts_at: slot }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, phone, inviter, starts_at: slot }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -74,6 +76,7 @@ function RecallRegistration({ token }) {
       <fieldset className="recall-fieldset" disabled={submitting || !anyAvailable}>
         <div className="form-group"><label className="form-label" htmlFor="recall-name">Tên *</label><input id="recall-name" className="form-input" autoComplete="name" required maxLength={200} value={name} onChange={event => setName(event.target.value)} placeholder="Nhập họ và tên" /></div>
         <div className="form-group"><label className="form-label" htmlFor="recall-phone">Số điện thoại *</label><input id="recall-phone" className="form-input" type="tel" autoComplete="tel" required maxLength={30} value={phone} onChange={event => setPhone(event.target.value)} placeholder="Nhập số điện thoại" /></div>
+        <div className="form-group"><label className="form-label" htmlFor="recall-inviter">Người mời *</label><select id="recall-inviter" className="form-select" required value={inviter} onChange={event => setInviter(event.target.value)}><option value="" disabled>Chọn người mời</option>{INVITERS.map(person => <option key={person} value={person}>{person}</option>)}</select></div>
         <div className="grid-cols-2">
           <div className="form-group"><label className="form-label" htmlFor="recall-date">Ngày đăng ký *</label><select id="recall-date" className="form-select" required value={date} onChange={event => { setDate(event.target.value); setSlot(''); }}><option value="" disabled>Chọn ngày</option>{dates.map(day => <option key={day} value={day} disabled={!form.slots.some(item => item.starts_at.startsWith(`${day}T`) && item.available)}>{formatDate(day)}</option>)}</select></div>
           <div className="form-group"><label className="form-label" htmlFor="recall-time">Giờ đăng ký *</label><select id="recall-time" className="form-select" required disabled={!date} value={slot} onChange={event => setSlot(event.target.value)}><option value="" disabled>Chọn giờ</option>{times.map(item => <option key={item.starts_at} value={item.starts_at} disabled={!item.available}>{item.starts_at.slice(11)}{!item.available ? ' — Không còn chỗ' : item.remaining != null ? ` — Còn ${item.remaining} chỗ` : ''}</option>)}</select></div>

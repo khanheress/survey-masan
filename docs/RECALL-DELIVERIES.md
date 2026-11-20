@@ -8,6 +8,8 @@
 - Form cũ nằm trong **Form cũ chưa gắn dự án**. Chọn **Chỉnh sửa → Gắn vào dự án**; link và các lượt đăng ký được giữ nguyên.
 - Việc gắn dự án không tự giới hạn đăng ký Recall theo trạng thái duyệt phản hồi. Các quy tắc ngày giờ và trùng lịch hiện tại vẫn được áp dụng.
 
+Form đăng ký Recall yêu cầu chọn **Người mời** từ danh sách dùng chung (Khánh, Tế, Ngọc). Người mời được lưu theo từng lượt đăng ký và hiển thị trong danh sách quản trị, file CSV. Đăng ký cũ giữ nguyên dữ liệu; nếu chưa có người mời thì hiển thị **Chưa cung cấp**.
+
 ## Giao mẫu
 
 Mở **Giao mẫu** ở menu, chọn dự án. Danh sách gồm người có ít nhất một phản hồi được duyệt **Cho tham gia** trong dự án đó. Mỗi hồ sơ được hiển thị một lần dù có nhiều phản hồi được duyệt.

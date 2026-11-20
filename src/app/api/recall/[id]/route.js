@@ -15,8 +15,8 @@ export async function GET(request, context) {
     if (!canManageRecall(form, session.user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const bookings = await db.prepare('SELECT * FROM recall_bookings WHERE form_id = ? ORDER BY starts_at, created_at, id').all(id);
     if (new URL(request.url).searchParams.get('format') === 'csv') {
-      const csv = Papa.unparse({ fields: ['Tên', 'Số điện thoại', 'Ngày đăng ký', 'Giờ đăng ký', 'Thời điểm gửi'],
-        data: bookings.map((item) => [item.name, item.phone, item.starts_at.slice(0, 10), item.starts_at.slice(11), item.created_at])
+      const csv = Papa.unparse({ fields: ['Tên', 'Số điện thoại', 'Người mời', 'Ngày đăng ký', 'Giờ đăng ký', 'Thời điểm gửi'],
+        data: bookings.map((item) => [item.name, item.phone, item.inviter || '', item.starts_at.slice(0, 10), item.starts_at.slice(11), item.created_at])
       }, { escapeFormulae: true });
       return new NextResponse('\uFEFF' + csv, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="recall.csv"' } });
     }
